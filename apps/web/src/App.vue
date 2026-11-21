@@ -64,6 +64,7 @@ const generatedDraft = ref("");
 const intelligenceContractId = ref("");
 const intelligenceSource = ref("");
 const intelligenceSourceLabel = ref("Pasted contract text");
+const intelligenceEngine = ref<"RULE_BASED" | "AI_COMPATIBLE">("RULE_BASED");
 const intelligenceReport = ref<IntelligenceReport | null>(null);
 const analyzingContract = ref(false);
 const savingTemplate = ref(false);
@@ -404,10 +405,21 @@ async function downloadLatest(contract: ContractSummary) {
   }
 }
 
+async function analyzeLatestDocument() {
+ errorMessage.value = ""; intelligenceReport.value = null; analyzingContract.value = true;
+ try {
+  const contract = contracts.value.find(item => item._id === intelligenceContractId.value);
+  if (!contract?.latestDocumentId) throw new Error("Upload a PDF or DOCX version to this contract first.");
+  const result = await api<{ report: IntelligenceReport }>(`/contracts/${contract._id}/intelligence/documents/${contract.latestDocumentId}/analyze`, { method: "POST", body: JSON.stringify({ engine: intelligenceEngine.value }) });
+  intelligenceReport.value = result.report;
+  successMessage.value = "Stored document review completed. Verify every finding against the source.";
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not analyze the stored document."; }
+ finally { analyzingContract.value = false; }
+}
 async function analyzeContractText() {
  errorMessage.value = ""; intelligenceReport.value = null; analyzingContract.value = true;
  try {
-  const result = await api<{ report: IntelligenceReport }>(`/contracts/${intelligenceContractId.value}/intelligence/analyze`, { method: "POST", body: JSON.stringify({ sourceText: intelligenceSource.value, sourceLabel: intelligenceSourceLabel.value }) });
+  const result = await api<{ report: IntelligenceReport }>(`/contracts/${intelligenceContractId.value}/intelligence/analyze`, { method: "POST", body: JSON.stringify({ sourceText: intelligenceSource.value, sourceLabel: intelligenceSourceLabel.value, engine: intelligenceEngine.value }) });
   intelligenceReport.value = result.report;
   successMessage.value = "Evidence-grounded contract review completed. Verify every finding against the source.";
  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not analyze contract text."; }
@@ -477,10 +489,12 @@ async function signOut() {
         <div class="panel-heading"><div><span class="eyebrow">CONTRACT INTELLIGENCE · RULE-BASED BASELINE</span><h2>Evidence-grounded review</h2></div><span class="count-chip">Human review required</span></div>
         <form @submit.prevent="analyzeContractText">
           <label>Contract<select v-model="intelligenceContractId" required><option value="" disabled>Select a contract</option><option v-for="contract in contracts" :key="contract._id" :value="contract._id">{{ contract.contractNumber }} · {{ contract.title }}</option></select></label>
+          <label>Analysis engine<select v-model="intelligenceEngine"><option value="RULE_BASED">Rules-based (local processing)</option><option value="AI_COMPATIBLE">Configured AI provider (sends text externally)</option></select></label>
+          <p v-if="intelligenceEngine === 'AI_COMPATIBLE'" class="field-hint">Contract text will be sent to your configured AI provider. Confirm your organization's data-processing approval before proceeding.</p>
           <label>Source label<input v-model="intelligenceSourceLabel" required maxlength="120"/></label>
           <label>Paste contract text<textarea v-model="intelligenceSource" required minlength="100" maxlength="30000" rows="7" placeholder="Paste the agreement text to review (100–30,000 characters)…"></textarea></label>
           <p class="field-hint">This baseline uses deterministic checks, not a generative AI model. The complete source text is not retained; reports store evidence excerpts and a SHA-256 fingerprint.</p>
-          <button class="primary-button" type="submit" :disabled="analyzingContract || !intelligenceContractId || intelligenceSource.trim().length < 100">{{ analyzingContract ? "Reviewing…" : "Analyze contract text" }}</button>
+          <div class="form-row"><button class="primary-button" type="submit" :disabled="analyzingContract || !intelligenceContractId || intelligenceSource.trim().length < 100">{{ analyzingContract ? "Reviewing…" : "Analyze pasted text" }}</button><button class="refresh-button" type="button" :disabled="analyzingContract || !contracts.find(item => item._id === intelligenceContractId)?.latestDocumentId" @click="analyzeLatestDocument">Analyze latest PDF/DOCX</button></div>
         </form>
         <div v-if="intelligenceReport" class="intelligence-results">
           <p class="panel-note">{{ intelligenceReport.summary }}</p>
