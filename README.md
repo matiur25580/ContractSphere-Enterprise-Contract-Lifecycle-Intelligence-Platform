@@ -191,7 +191,7 @@ Generation creates a tenant-scoped DRAFT contract and stores rendered text with 
 - [x] Governed templates, dynamic fields, versioned clause library, and draft contract generation
 - [x] Initial obligations and renewal tracking with derived notice deadlines
 - [x] Vendor/counterparty directory, contract linkage, compliance expiry visibility, and human-reviewed risk assessments\n- [ ] Automated notifications and durable scheduled jobs
-- [ ] AI-assisted contract intelligence with evidence references
+- [x] Evidence-grounded contract clause extraction, deterministic risk flags, missing-term detection, and analysis history (rules-based baseline; no external LLM integration yet)
 - [ ] Audit, analytics, exports, integrations, and production hardening
 
 ## Development commands
@@ -232,3 +232,15 @@ All routes require `Authorization: Bearer <accessToken>` and are prefixed with `
 Audit events are written for contract creation/updates, document upload activity, workflow definition/submission/decisions, obligation and renewal changes, and vendor profile/risk changes. Audit reads are tenant-scoped and restricted to OWNER/ADMIN. The API exposes no audit update/delete routes; this is application-level append-only behavior, not a claim of database-level immutability. Production deployments should use a dedicated database role that denies update/delete on the audit collection, backups, retention controls, and optionally tamper-evident hash chaining or WORM storage.
 
 Notifications are private to the recipient and tenant. Submitting a contract for approval creates deduplicated in-app notifications for assigned approvers. Notification read state is updated only by the owning user. Email delivery, push delivery, scheduled reminders, and a durable job queue are not included in this milestone; they require delivery-provider and worker infrastructure.
+
+
+## Contract intelligence API
+
+All routes require an access token and are scoped to the authenticated tenant. Contract owners/creators and OWNER/ADMIN users can analyze or view a contract's reports.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/contracts/:contractId/intelligence/analyze` | Analyze pasted agreement text (100–30,000 characters) |
+| GET | `/contracts/:contractId/intelligence` | List the latest 20 analysis reports |
+
+The current engine is an explainable deterministic baseline, not a generative AI model. It detects common clause categories, selected risk patterns and potentially missing terms. Findings include confidence indicators and source character offsets/excerpts where evidence exists. Reports retain a SHA-256 source fingerprint and excerpts, not the complete submitted contract text. Uploaded PDF/DOCX extraction and external LLM integration are not yet included. False negatives/positives are possible; findings are not legal advice and require qualified human review.

@@ -10,6 +10,7 @@ import { vendorRouter } from "./modules/vendors/vendor.routes.js";
 import { auditRouter } from "./modules/audit/audit.routes.js";
 import { notificationRouter } from "./modules/notifications/notification.routes.js";
 import { templateRouter } from "./modules/templates/template.routes.js";
+import { intelligenceRouter } from "./modules/intelligence/intelligence.routes.js";
 import { env } from "./config/env.js";
 import { errorHandler } from "./common/error-handler.js";
 import { healthRouter } from "./modules/health/health.routes.js";
@@ -29,6 +30,7 @@ app.get("/", (_req, res) => res.json({ success: true, data: { name: "ContractSph
 app.use(`${env.API_PREFIX}/health`, healthRouter);
 app.use(`${env.API_PREFIX}/auth`, authRouter);
 app.use(`${env.API_PREFIX}/contracts`, contractRouter);
+app.use(`${env.API_PREFIX}/contracts`, intelligenceRouter);
 app.use(`${env.API_PREFIX}/workflows`, workflowRouter);
 app.use(`${env.API_PREFIX}/obligations`, obligationRouter);
 app.use(`${env.API_PREFIX}/vendors`, vendorRouter);

@@ -201,7 +201,7 @@ async function templateAction(template: TemplateItem, action: "submit" | "approv
 async function generateFromTemplate() {
  errorMessage.value = ""; generatedDraft.value = "";
  try {
-  const result = await api<{ contract: ContractSummary; draftContent: string }>(`/templates/${generationForm.templateId}/generate`, { method: "POST", body: JSON.stringify({ contractNumber: generationForm.contractNumber, counterparty: generationForm.counterparty, values: Object.fromEntries(templates.find(template => template._id === generationForm.templateId)?.fields.map(field => [field.key, generationValues[field.key] ?? ""]) ?? []) }) });
+  const result = await api<{ contract: ContractSummary; draftContent: string }>(`/templates/${generationForm.templateId}/generate`, { method: "POST", body: JSON.stringify({ contractNumber: generationForm.contractNumber, counterparty: generationForm.counterparty, values: Object.fromEntries(templates.value.find(template => template._id === generationForm.templateId)?.fields.map(field => [field.key, generationValues[field.key] ?? ""]) ?? []) }) });
   generatedDraft.value = result.draftContent; successMessage.value = `Draft ${result.contract.contractNumber} created. Review the wording before approval or signature.`;
   await loadContracts();
  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not generate contract draft."; }
