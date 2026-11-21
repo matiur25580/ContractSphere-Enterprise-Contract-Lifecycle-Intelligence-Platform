@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import { HttpError } from "../../common/http-error.js";
+import { User } from "../users/user.model.js";
 import { createContract } from "../contracts/contract.service.js";
 import { Clause } from "./clause.model.js";
 import { ContractTemplate } from "./template.model.js";
@@ -34,6 +35,10 @@ export async function submitTemplate(tenantId: string, templateId: string) {
 export async function approveTemplate(tenantId: string, approverId: string, templateId: string) {
  const pending = await ContractTemplate.findOne({ _id: templateId, tenantId: oid(tenantId), status: "PENDING_APPROVAL" }).select("createdBy").lean();
  if (!pending) throw new HttpError(404, "Pending template not found.", "TEMPLATE_NOT_FOUND");
+ const approver = await User.findOne({
+  _id: oid(approverId), tenantId: oid(tenantId), status: "active", role: { $in: ["OWNER", "ADMIN"] }
+ }).select("_id").lean();
+ if (!approver) throw new HttpError(403, "An active owner or administrator from this organization must approve the template.", "INVALID_TEMPLATE_APPROVER");
  if (pending.createdBy.toString() === approverId) throw new HttpError(403, "A different owner or administrator must approve this template.", "SELF_APPROVAL_FORBIDDEN");
  const template = await ContractTemplate.findOneAndUpdate(
   { _id: templateId, tenantId: oid(tenantId), status: "PENDING_APPROVAL", createdBy: { $ne: oid(approverId) } },
