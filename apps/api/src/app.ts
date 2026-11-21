@@ -1,23 +1,27 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import pinoHttp from "pino-http";
 import cookieParser from "cookie-parser";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { contractRouter } from "./modules/contracts/contract.routes.js";
-import {env} from "./config/env.js";
-import {errorHandler} from "./common/error-handler.js";
-import {healthRouter} from "./modules/health/health.routes.js";
-export const app=express();
+import { env } from "./config/env.js";
+import { errorHandler } from "./common/error-handler.js";
+import { healthRouter } from "./modules/health/health.routes.js";
+
+export const app = express();
 app.disable("x-powered-by");
 app.use(helmet());
-app.use(cors({origin:env.WEB_ORIGIN,credentials:true}));
-app.use(express.json({limit:"1mb"}));
+app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
-app.use(pinoHttp({level:env.LOG_LEVEL}));
-app.get("/",(_req,res)=>res.json({success:true,data:{name:"ContractSphere API",version:"0.1.0"}}));
-app.use(`${env.API_PREFIX}/health`,healthRouter);
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on("finish", () => console.info(JSON.stringify({ method: req.method, path: req.path, statusCode: res.statusCode, durationMs: Date.now() - startedAt })));
+  next();
+});
+app.get("/", (_req, res) => res.json({ success: true, data: { name: "ContractSphere API", version: "0.1.0" } }));
+app.use(`${env.API_PREFIX}/health`, healthRouter);
 app.use(`${env.API_PREFIX}/auth`, authRouter);
 app.use(`${env.API_PREFIX}/contracts`, contractRouter);
-app.use((_req,res)=>res.status(404).json({success:false,error:{code:"NOT_FOUND",message:"Route not found."}}));
+app.use((_req, res) => res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Route not found." } }));
 app.use(errorHandler);

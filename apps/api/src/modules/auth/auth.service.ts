@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { Types } from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../../config/env.js";
@@ -21,8 +22,8 @@ async function createRefreshSession(userId: string, tenantId: string) {
   return { token, expiresAt };
 }
 
-function publicUser(user: { id: string; name: string; email: string; role: string }, tenant: { id: string; name: string; slug: string }) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role, organization: { id: tenant.id, name: tenant.name, slug: tenant.slug } };
+function publicUser(user: { _id: Types.ObjectId; name: string; email: string; role: string }, tenant: { _id: Types.ObjectId; name: string; slug: string }) {
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role, organization: { id: tenant._id.toString(), name: tenant.name, slug: tenant.slug } };
 }
 
 export async function register(input: { organizationName: string; organizationSlug: string; name: string; email: string; password: string }) {

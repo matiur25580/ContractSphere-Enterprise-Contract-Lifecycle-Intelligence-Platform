@@ -18,7 +18,7 @@ const validate = (schema: z.ZodTypeAny, source: "body" | "query" = "body"): Requ
 };
 const idParam = (req: Parameters<RequestHandler>[0], key: string) => {
   const value = req.params[key];
-  if (!value || !/^[a-f\d]{24}$/i.test(value)) throw new HttpError(400, "Invalid resource identifier.", "INVALID_ID");
+  if (typeof value !== "string" || !/^[a-f\d]{24}$/i.test(value)) throw new HttpError(400, "Invalid resource identifier.", "INVALID_ID");
   return value;
 };
 
@@ -39,6 +39,7 @@ contractRouter.get("/:contractId", asyncHandler(async (req, res) => {
 }));
 
 contractRouter.patch("/:contractId", validate(updateContractSchema), asyncHandler(async (req, res) => {
+  if (req.body.status && req.auth!.role === "MEMBER") throw new HttpError(403, "Only organization owners and administrators can change contract status.", "FORBIDDEN");
   const contract = await updateContract(req.auth!.tenantId, req.auth!.userId, idParam(req, "contractId"), req.body);
   res.json({ success: true, data: { contract } });
 }));

@@ -50,7 +50,7 @@ export async function updateContract(tenantId: string, userId: string, contractI
   if (changes.ownerId && !await User.exists({ _id: changes.ownerId, tenantId: tenant, status: "active" })) throw new HttpError(400, "Contract owner must be an active member of this organization.", "INVALID_CONTRACT_OWNER");
   const updated = await Contract.findOneAndUpdate(
     { _id: contractId, tenantId: tenant, status: { $ne: "ARCHIVED" } },
-    { $set: { ...changes, updatedBy: tenantObjectId(userId) } },
+    { $set: { ...changes, ...(changes.status === "ARCHIVED" ? { archivedAt: new Date() } : {}), updatedBy: tenantObjectId(userId) } },
     { new: true, runValidators: true }
   );
   if (!updated) throw new HttpError(404, "Contract not found or archived.", "CONTRACT_NOT_FOUND");

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { CONTRACT_STATUSES, CONTRACT_TYPES } from "./contract.model.js";
 
 const dateField = z.string().datetime({ offset: true }).optional().transform(value => value ? new Date(value) : undefined);
-export const createContractSchema = z.object({
+const contractFields = z.object({
   title: z.string().trim().min(2).max(200),
   contractNumber: z.string().trim().min(2).max(60).regex(/^[A-Za-z0-9._/-]+$/),
   type: z.enum(CONTRACT_TYPES),
@@ -14,14 +14,17 @@ export const createContractSchema = z.object({
   currency: z.string().trim().length(3).default("USD").transform(value => value.toUpperCase()),
   contractValue: z.number().min(0).max(1_000_000_000_000).optional(),
   tags: z.array(z.string().trim().min(1).max(32)).max(20).default([])
-}).superRefine((value, ctx) => {
-  if (value.startDate && value.endDate && value.endDate < value.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must be on or after the start date." });
 });
-export const updateContractSchema = createContractSchema.partial().omit({ contractNumber: true }).extend({
+const validateDateRange = (value: { startDate?: Date; endDate?: Date }, ctx: z.RefinementCtx) => {
+  if (value.startDate && value.endDate && value.endDate < value.startDate) {
+    ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must be on or after the start date." });
+  }
+};
+export const createContractSchema = contractFields.superRefine(validateDateRange);
+export const updateContractSchema = contractFields.partial().omit({ contractNumber: true }).extend({
   status: z.enum(CONTRACT_STATUSES).optional()
-}).superRefine((value, ctx) => {
-  if (value.startDate && value.endDate && value.endDate < value.startDate) ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must be on or after the start date." });
-});
+}).superRefine(validateDateRange);
+
 export const listContractsSchema = z.object({
   q: z.string().trim().max(120).optional(),
   status: z.enum(CONTRACT_STATUSES).optional(),
