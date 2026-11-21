@@ -9,6 +9,19 @@ export const createVendorSchema = z.object({
  aliases: z.array(z.string().trim().min(2).max(180)).max(20).default([]), tags: z.array(z.string().trim().min(1).max(32)).max(30).default([]),
  contacts: z.array(contact).max(30).default([]), certifications: z.array(certification).max(50).default([])
 }).strict();
-export const updateVendorSchema = createVendorSchema.partial().extend({ status: z.enum(VENDOR_STATUSES).optional() }).strict().refine(v => Object.keys(v).length > 0);
+export const updateVendorSchema = z.object({
+ legalName: createVendorSchema.shape.legalName.optional(),
+ displayName: createVendorSchema.shape.displayName,
+ category: z.enum(VENDOR_CATEGORIES).optional(),
+ website: createVendorSchema.shape.website,
+ industry: createVendorSchema.shape.industry,
+ country: createVendorSchema.shape.country,
+ taxId: createVendorSchema.shape.taxId,
+ aliases: z.array(z.string().trim().min(2).max(180)).max(20).optional(),
+ tags: z.array(z.string().trim().min(1).max(32)).max(30).optional(),
+ contacts: z.array(contact).max(30).optional(),
+ certifications: z.array(certification).max(50).optional(),
+ status: z.enum(VENDOR_STATUSES).optional()
+}).strict().refine(v => Object.keys(v).length > 0);
 export const listVendorsSchema = z.object({ q: z.string().trim().max(120).optional(), status: z.enum(VENDOR_STATUSES).optional(), category: z.enum(VENDOR_CATEGORIES).optional(), riskLevel: z.enum(VENDOR_RISK_LEVELS).optional(), page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) });
 export const assessVendorSchema = z.object({ score: z.number().int().min(0).max(100), factors: z.array(z.string().trim().min(2).max(160)).max(20).default([]), notes: z.string().trim().max(2000).optional() }).strict();
