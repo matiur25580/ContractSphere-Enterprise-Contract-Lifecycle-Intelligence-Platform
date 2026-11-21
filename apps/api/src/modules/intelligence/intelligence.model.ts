@@ -13,6 +13,7 @@ const reportSchema = new Schema({
  tenantId: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
  contractId: { type: Schema.Types.ObjectId, ref: "Contract", required: true, index: true },
  createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+ jobId: { type: Schema.Types.ObjectId, ref: "DocumentProcessingJob" },
  sourceLabel: { type: String, required: true, maxlength: 120 },
  sourceFingerprint: { type: String, required: true, match: /^[a-f0-9]{64}$/ },
  sourceLength: { type: Number, required: true, min: 1, max: 30000 },
@@ -27,4 +28,5 @@ const reportSchema = new Schema({
  riskCounts: { LOW: Number, MEDIUM: Number, HIGH: Number, CRITICAL: Number }
 }, { timestamps: true, versionKey: false });
 reportSchema.index({ tenantId: 1, contractId: 1, createdAt: -1 });
+reportSchema.index({ jobId: 1 }, { unique: true, partialFilterExpression: { jobId: { $exists: true } } });
 export const ContractIntelligenceReport = model("ContractIntelligenceReport", reportSchema);
