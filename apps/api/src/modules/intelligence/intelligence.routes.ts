@@ -5,6 +5,7 @@ import { asyncHandler } from "../../common/async-handler.js";
 import { requireAuth } from "../auth/auth.middleware.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
 import { analyzeContract, analyzeStoredDocument, listContractAnalyses } from "./intelligence.service.js";
+import { getDocumentAnalysisJob } from "./document-job.service.js";
 import { compareContractSources, listContractComparisons } from "./comparison.service.js";
 export const intelligenceRouter = Router();
 intelligenceRouter.use(requireAuth);
@@ -60,6 +61,10 @@ intelligenceRouter.post("/:contractId/intelligence/compare", validate(z.union([p
 intelligenceRouter.get("/:contractId/intelligence/comparisons", asyncHandler(async (req, res) => {
  const comparisons = await listContractComparisons(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "contractId"));
  res.json({ success: true, data: { comparisons } });
+}));
+intelligenceRouter.get("/:contractId/intelligence/jobs/:jobId", asyncHandler(async (req, res) => {
+ const job = await getDocumentAnalysisJob(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "contractId"), idParam(req, "jobId"));
+ res.json({ success: true, data: { job } });
 }));
 intelligenceRouter.get("/:contractId/intelligence", asyncHandler(async (req, res) => {
  const reports = await listContractAnalyses(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "contractId"));
