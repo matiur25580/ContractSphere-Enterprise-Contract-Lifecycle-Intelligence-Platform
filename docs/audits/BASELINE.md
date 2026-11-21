@@ -222,3 +222,22 @@ This section records findings confirmed during the subsequent PR and source revi
 - F-06 remains open: workflow and contract state transitions are still separate writes, and the Contract update result is not checked. A transaction or durable recoverable reconciliation design is still required to close this risk. MongoDB was provisioned as a standalone service for this test suite; transaction semantics have not been tested.
 - The CI job currently runs with a MongoDB service but the workflow service integration suite does not test document upload, storage scanning, worker lease takeover, or report idempotency.
 - No production-like cloud configuration, penetration test, production deployment, or full end-to-end operational test is claimed.
+
+
+## Verification update — transactional workflow state (2026-11-21)
+
+### F-06 remediation
+
+- PR #19 merged as `fc453f21673f3c620bcbb3597423a1b99952fb6b`.
+- Workflow submission now creates the active WorkflowInstance and transitions its Contract from DRAFT to IN_REVIEW inside one MongoDB transaction.
+- Approval and rejection decisions now update the WorkflowInstance and the corresponding Contract inside one transaction. The service checks the contract update's `matchedCount`; if the contract is no longer IN_REVIEW, it raises a conflict and aborts the transaction instead of leaving a terminal workflow with a stale contract.
+- A replica-set-backed regression test changes the contract state after submission, attempts final approval, and verifies the transaction rolls back the workflow decision while preserving the independently changed contract state.
+- CI run [44932068127](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44932068127) completed successfully, including typecheck, build, and API integration tests against a MongoDB 7 replica set.
+- MongoDB must now run as a replica set or sharded cluster for workflow submission/decision transactions. A standalone local `mongod` is insufficient. README and `docs/operations/MONGODB.md` document the local single-node replica-set setup.
+
+### Residual limitations
+
+- The transaction change covers workflow instance and contract status consistency. It does not make external notification or audit writes part of the same transaction; routes still perform those actions after the workflow service returns. A failure in post-commit audit/notification delivery can therefore leave a committed decision without the corresponding side effect. Durable outbox delivery remains a future hardening task.
+- Upload completion and document worker lease/idempotency risks F-02 and F-09 remain open. No S3/ClamAV integration or worker lease-takeover integration test is claimed.
+- The root npm lockfile remains absent and CI still uses `npm install`; deterministic dependency resolution remains outstanding.
+- This remains a source review with CI evidence, not a production-readiness certification, penetration test, production cloud review, or deployment.
