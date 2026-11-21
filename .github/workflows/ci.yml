@@ -38,6 +38,13 @@ jobs:
           exit 1
       - name: Install dependencies
         run: npm install
+      - name: Export generated npm workspace lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: contractsphere-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Production dependency security audit
         run: npm audit --omit=dev --audit-level=high
       - name: Typecheck
