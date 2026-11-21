@@ -54,6 +54,9 @@ const savingVendor = ref(false);
 const templates = ref<TemplateItem[]>([]);
 const clauses = ref<ClauseItem[]>([]);
 const templateForm = reactive({ name: "Mutual NDA", contractType: "NDA", sectionHeading: "Effective date", sectionContent: "This agreement is effective from {{effectiveDate}}. Replace this sample language with approved legal wording.", clauseId: "" });
+const templateFields = ref<Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>>([{ key: "effectiveDate", label: "Effective date", type: "DATE", required: true, options: [] }]);
+const newTemplateField = reactive({ key: "", label: "", type: "TEXT", required: true, options: "" });
+const generationValues = reactive<Record<string, string>>({ effectiveDate: "" });
 const clauseForm = reactive({ key: "", title: "", category: "General", body: "" });
 const generationForm = reactive({ templateId: "", contractNumber: "", counterparty: "", effectiveDate: "" });
 const generatedDraft = ref("");
@@ -145,6 +148,21 @@ async function loadTemplates() {
   if (!generationForm.templateId) generationForm.templateId = templates.value.find(item => item.status === "APPROVED")?._id ?? "";
  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load templates and clauses."; }
 }
+function addTemplateField() {
+ const key = newTemplateField.key.trim();
+ if (!/^[a-z][a-zA-Z0-9_]{1,39}$/.test(key) || templateFields.value.some(field => field.key === key)) {
+  errorMessage.value = "Use a unique field key beginning with a lowercase letter (2–40 characters)."; return;
+ }
+ const options = newTemplateField.options.split(",").map(value => value.trim()).filter(Boolean);
+ if (newTemplateField.type === "CHOICE" && !options.length) { errorMessage.value = "Choice fields need at least one comma-separated option."; return; }
+ templateFields.value.push({ key, label: newTemplateField.label.trim(), type: newTemplateField.type, required: newTemplateField.required, options: newTemplateField.type === "CHOICE" ? options : [] });
+ Object.assign(newTemplateField, { key: "", label: "", type: "TEXT", required: true, options: "" });
+ errorMessage.value = "";
+}
+function removeTemplateField(key: string) {
+ if (templateFields.value.length <= 1) return;
+ templateFields.value = templateFields.value.filter(field => field.key !== key);
+}
 function reviseClause(clause: ClauseItem) {
  editingClauseId.value = clause._id;
  Object.assign(clauseForm, { key: clause.key, title: clause.title, category: clause.category, body: clause.body });
@@ -169,7 +187,7 @@ async function createTemplate() {
  try {
   await api("/templates", { method: "POST", body: JSON.stringify({
    name: templateForm.name, contractType: templateForm.contractType,
-   fields: [{ key: "effectiveDate", label: "Effective date", type: "DATE", required: true, options: [] }],
+   fields: templateFields.value,
    sections: [{ heading: templateForm.sectionHeading, content: templateForm.sectionContent, ...(templateForm.clauseId ? { clauseId: templateForm.clauseId } : {}), optional: false }]
   }) });
   successMessage.value = "Draft template created. Submit it for independent approval."; await loadTemplates();
@@ -183,7 +201,7 @@ async function templateAction(template: TemplateItem, action: "submit" | "approv
 async function generateFromTemplate() {
  errorMessage.value = ""; generatedDraft.value = "";
  try {
-  const result = await api<{ contract: ContractSummary; draftContent: string }>(`/templates/${generationForm.templateId}/generate`, { method: "POST", body: JSON.stringify({ contractNumber: generationForm.contractNumber, counterparty: generationForm.counterparty, values: { effectiveDate: generationForm.effectiveDate } }) });
+  const result = await api<{ contract: ContractSummary; draftContent: string }>(`/templates/${generationForm.templateId}/generate`, { method: "POST", body: JSON.stringify({ contractNumber: generationForm.contractNumber, counterparty: generationForm.counterparty, values: Object.fromEntries(templates.find(template => template._id === generationForm.templateId)?.fields.map(field => [field.key, generationValues[field.key] ?? ""]) ?? []) }) });
   generatedDraft.value = result.draftContent; successMessage.value = `Draft ${result.contract.contractNumber} created. Review the wording before approval or signature.`;
   await loadContracts();
  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not generate contract draft."; }
@@ -530,7 +548,12 @@ async function signOut() {
             <div class="form-row"><label>Agreement type<select v-model="templateForm.contractType"><option>NDA</option><option>MSA</option><option>SOW</option><option>SUPPLIER</option><option>EMPLOYMENT</option><option>LEASE</option><option>DPA</option><option>OTHER</option></select></label><label>Section heading<input v-model="templateForm.sectionHeading" required maxlength="160"/></label></div>
             <label>Section wording<textarea v-model="templateForm.sectionContent" required rows="3" maxlength="20000"/></label>
             <label>Pin clause version (optional)<select v-model="templateForm.clauseId"><option value="">Use section wording above</option><option v-for="clause in clauses" :key="clause._id" :value="clause._id">{{ clause.title }} · v{{ clause.version }}</option></select></label>
-            <p class="field-hint">The sample template includes a required effectiveDate field. Include its placeholder token in the section wording.</p>
+            <div class="field-hint"><strong>Dynamic fields</strong><p v-for="field in templateFields" :key="field.key">{{ field.label }} · {{ field.key }} · {{ field.type }} · {{ field.required ? "Required" : "Optional" }} <button v-if="templateFields.length > 1" class="refresh-button" type="button" @click="removeTemplateField(field.key)">Remove</button></p></div>
+            <div class="form-row"><label>Field key<input v-model="newTemplateField.key" required pattern="[a-z][a-zA-Z0-9_]{1,39}" maxlength="40" placeholder="governingLaw"/></label><label>Field label<input v-model="newTemplateField.label" required minlength="2" maxlength="100" placeholder="Governing law"/></label></div>
+            <div class="form-row"><label>Field type<select v-model="newTemplateField.type"><option>TEXT</option><option>DATE</option><option>NUMBER</option><option>EMAIL</option><option>CHOICE</option></select></label><label v-if="newTemplateField.type === 'CHOICE'">Choice options<input v-model="newTemplateField.options" required placeholder="India, Singapore, England"/></label></div>
+            <label class="field-hint"><input v-model="newTemplateField.required" type="checkbox"/> Required field</label>
+            <button class="refresh-button" type="button" @click="addTemplateField">Add dynamic field</button>
+            <p class="field-hint">Use each field key as a placeholder in section wording, for example {{ '{{' }}effectiveDate{{ '}}' }}.</p>
             <button class="primary-button" type="submit" :disabled="savingTemplate">{{ savingTemplate ? "Saving…" : "Create draft template" }}</button>
           </form>
           <div class="definition-list"><article v-for="template in templates" :key="template._id" class="definition-row"><div class="vendor-title"><strong>{{ template.name }} · v{{ template.version }}</strong><span class="status-pill" :class="template.status.toLowerCase()">{{ template.status.replace("_", " ") }}</span></div><small>{{ template.contractType }} · {{ template.fields.length }} dynamic fields · {{ template.sections.length }} sections</small><div class="task-actions"><button v-if="template.status === 'DRAFT'" class="submit-action" @click="templateAction(template, 'submit')">Submit for approval</button><button v-if="template.status === 'PENDING_APPROVAL'" class="approve-button" @click="templateAction(template, 'approve')">Approve</button><button v-if="template.status === 'APPROVED'" class="submit-action" @click="templateAction(template, 'revisions')">New revision</button></div></article><p v-if="!templates.length" class="panel-note">No templates created yet. A different owner or administrator must approve each draft.</p></div>
@@ -540,7 +563,7 @@ async function signOut() {
           <form @submit.prevent="generateFromTemplate">
             <label>Approved template<select v-model="generationForm.templateId" required><option value="" disabled>Select approved template</option><option v-for="template in templates.filter(item => item.status === 'APPROVED')" :key="template._id" :value="template._id">{{ template.name }} · v{{ template.version }}</option></select></label>
             <div class="form-row"><label>Contract number<input v-model="generationForm.contractNumber" required minlength="2" maxlength="60" placeholder="NDA-2026-001"/></label><label>Counterparty<input v-model="generationForm.counterparty" required minlength="2" maxlength="160" placeholder="Northstar Ltd"/></label></div>
-            <label>Effective date<input v-model="generationForm.effectiveDate" type="date" required/></label>
+            <label v-for="field in (templates.find(item => item._id === generationForm.templateId)?.fields ?? [])" :key="field.key">{{ field.label }}<select v-if="field.type === 'CHOICE'" v-model="generationValues[field.key]" :required="field.required"><option value="">Select {{ field.label }}</option><option v-for="option in field.options" :key="option" :value="option">{{ option }}</option></select><input v-else v-model="generationValues[field.key]" :type="field.type === 'DATE' ? 'date' : field.type === 'NUMBER' ? 'number' : field.type === 'EMAIL' ? 'email' : 'text'" :required="field.required" :step="field.type === 'NUMBER' ? 'any' : undefined"/></label>
             <button class="primary-button" type="submit" :disabled="!generationForm.templateId">Generate draft contract</button>
           </form>
           <pre v-if="generatedDraft" class="generated-draft">{{ generatedDraft }}</pre>
