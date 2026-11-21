@@ -179,7 +179,7 @@ The project uses a **TypeScript modular monolith**. Domain modules are separated
 5. The API verifies object metadata before registering a version.
 6. Clean uploaded documents are registered as immutable versions and enqueue durable analysis jobs; a MongoDB-backed worker claims jobs with expiring leases, retries transient failures, and persists report IDs and job status.
 7. Intelligence and comparison services extract text, calculate source fingerprints and produce bounded, evidence-linked outputs.
-7. Security-sensitive actions are written to the audit collection.
+8. Security-sensitive actions are written to the audit collection.
 
 ---
 
@@ -332,7 +332,7 @@ Contract search supports query, status, type, counterparty, pagination and sorti
 | POST | /contracts/:contractId/intelligence/analyze | Analyze pasted contract text |
 | POST | /contracts/:contractId/intelligence/documents/:fileId/analyze | Extract and analyze stored PDF/DOCX |
 | GET | /contracts/:contractId/intelligence | Read latest 20 analysis reports |
-| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/:contractId/intelligence/jobs/:jobId | Read authorized background-analysis job status |
+| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/:contractId/intelligence/jobs/:jobId | Read authorized background-analysis job status |
 | POST | /contracts/:contractId/intelligence/compare | Compare two pasted texts or two stored document versions |
 | GET | /contracts/:contractId/intelligence/comparisons | Read latest 20 version comparisons |
 
@@ -520,7 +520,7 @@ The repository view brings agreement identity, counterparty, lifecycle status, v
 - [ ] Durable jobs, reminders and outbound notification delivery
 - [ ] Malware scanning and deeper document validation
 - [ ] Database-enforced audit immutability and enterprise retention controls
-- [ ] End-to-end security, performance and disaster-recovery validation\n- [ ] Production readiness, dependency and infrastructure configuration review
+- [ ] End-to-end security, performance and disaster-recovery validation\n- [ ] Production readiness, dependency and infrastructure configuration review\n- [ ] Production readiness, dependency and infrastructure configuration review
 
 ---
 
