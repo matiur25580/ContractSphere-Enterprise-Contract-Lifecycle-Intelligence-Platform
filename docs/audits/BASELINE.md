@@ -262,3 +262,22 @@ This section records findings confirmed during the subsequent PR and source revi
 - F-09 document-worker lease expiry/idempotent report side effects remains open; the new unique job-per-file index prevents duplicate queue rows for the same file but does not itself fence all worker side effects.
 - The root npm lockfile remains absent; CI continues to use `npm install`.
 - No live production storage/scanner test, cloud review, penetration test, or deployment is claimed.
+
+
+## Verification update — document worker lease and report idempotency (2026-11-21)
+
+### F-09 remediation
+
+- PR #23 merged as `8852cb6201153d1f28d27a7b30a7c16999f80aff`.
+- The document worker now renews its five-minute processing lease periodically while analysis is running, reducing the chance that a healthy long-running analysis is reclaimed by another worker.
+- Worker-triggered stored-document analysis carries the originating job ID into its intelligence report. A unique partial index on report `jobId` and duplicate-key recovery ensure that retrying after a report commit returns the existing report rather than creating a second report for that job.
+- Replica-set-backed integration tests cover sequential retries and concurrent report creation for one job ID.
+- CI run [44933210999](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44933210999) completed successfully, including dependency audit, typecheck, build and the API test suite.
+
+### Remaining worker limitations
+
+- The lease heartbeat is best-effort. A stalled process or event loop can still miss renewals and lose its lease; the final job status write remains fenced by `lockedBy`.
+- The report idempotency key prevents duplicate persisted reports, but two workers can still perform duplicate extraction or external AI-provider calls if a lease expires while the first worker is processing. Provider billing/side effects are not made exactly-once.
+- The integration suite validates report deduplication and other service behavior on MongoDB, but does not yet run a multi-process stress test with deliberately delayed analysis crossing the lease boundary.
+- F-09 is therefore **mitigated for persisted report duplication**, not fully closed for duplicate processing cost or every possible external side effect.
+- No real ClamAV/S3 infrastructure test, production worker load test, penetration test, or deployment is claimed.
