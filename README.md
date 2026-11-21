@@ -4,7 +4,7 @@
 
 ContractSphere is a multi-tenant contract lifecycle management (CLM) platform for creating, reviewing, approving, executing, monitoring, and analyzing business agreements.
 
-> Status: foundation in progress. This repository currently contains the initial architecture and application scaffold; production capabilities will be delivered incrementally.
+> Status: foundation and authentication milestone in progress. Core capabilities are being delivered incrementally.
 
 ## Product vision
 
@@ -22,7 +22,7 @@ Give legal, procurement, finance, and business teams one secure system of record
 
 ## Architecture
 
-The initial implementation is a **TypeScript modular monolith** in an npm-workspaces monorepo. This keeps local development and deployment practical while preserving clear module boundaries for future extraction if scale requires it.
+The initial implementation is a **TypeScript modular monolith** in an npm-workspaces monorepo.
 
 ```text
 apps/
@@ -39,8 +39,8 @@ infra/       Local development and deployment assets
 |---|---|
 | Frontend | Vue 3, Composition API, TypeScript, Vite, Pinia, Vue Router |
 | Backend | Node.js, Express, TypeScript, Zod |
-| Data | MongoDB, Mongoose (introduced with domain modules) |
-| Quality | Vitest, Supertest, ESLint, Prettier (to be expanded) |
+| Data | MongoDB, Mongoose |
+| Quality | Vitest, Supertest (planned), TypeScript |
 | Operations | Docker Compose, GitHub Actions (planned) |
 
 ## Getting started
@@ -49,9 +49,9 @@ infra/       Local development and deployment assets
 
 - Node.js 20.19+ or 22.12+
 - npm 10+
-- MongoDB 7+ (local or Atlas) for database-backed modules
+- MongoDB 7+ (local or Atlas)
 
-### Install
+### Install and run
 
 ```bash
 npm install
@@ -59,13 +59,25 @@ cp apps/api/.env.example apps/api/.env
 npm run dev
 ```
 
-The API health endpoint is `http://localhost:4000/api/v1/health`. The web app runs at `http://localhost:5173`.
+The API health endpoint is `http://localhost:4000/api/v1/health`. The web app runs at `http://localhost:5173`. Authentication and tenant onboarding require MongoDB to be reachable.
 
-The initial health endpoint does not require MongoDB. Database connectivity will be enabled as domain modules are introduced.
+## Authentication API
 
-## Environment
+All routes are prefixed with `/api/v1`.
 
-See `apps/api/.env.example`. Never commit real credentials, private keys, production connection strings, or uploaded contract documents.
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/auth/register` | Create an organization and its first OWNER account |
+| POST | `/auth/login` | Sign in using organization slug, email, and password |
+| POST | `/auth/refresh` | Rotate the HttpOnly refresh-token cookie |
+| POST | `/auth/logout` | Revoke the current refresh session |
+| GET | `/auth/me` | Return the authenticated user and organization |
+
+Registration requires `organizationName`, `organizationSlug`, `name`, `email`, and a password of at least 12 characters containing lowercase, uppercase, and numeric characters. Login requires `organizationSlug`, `email`, and `password`.
+
+The API returns a short-lived JWT access token in the response body. The opaque refresh token is stored only as a SHA-256 hash in MongoDB and delivered through an HttpOnly cookie. Refresh rotates the token; logout revokes the current session. Refresh and logout requests must include the configured frontend `Origin`.
+
+Roles currently defined are `OWNER`, `ADMIN`, and `MEMBER`. The reusable `requireRoles(...)` middleware is available for protected administrative routes. Tenant IDs are carried in verified access-token claims; future tenant-owned resource modules must scope every database query by that tenant ID.
 
 ## Engineering principles
 
@@ -80,8 +92,8 @@ See `apps/api/.env.example`. Never commit real credentials, private keys, produc
 ## Delivery roadmap
 
 - [x] Initial monorepo and API/web application scaffold
-- [ ] Authentication, tenant onboarding, and organization context
-- [ ] Users, roles, permissions, and resource-level authorization
+- [x] Authentication, tenant onboarding, and organization context
+- [x] Initial users, roles, and role-based route guard
 - [ ] Contract repository, document upload, metadata, and versioning
 - [ ] Templates, clauses, and approval workflow engine
 - [ ] Obligations, renewals, vendors, and notifications
@@ -94,8 +106,14 @@ See `apps/api/.env.example`. Never commit real credentials, private keys, produc
 npm run dev
 npm run build
 npm run typecheck
-npm run lint
+npm run test --workspace @contractsphere/api
 ```
+
+## Environment and security
+
+See `apps/api/.env.example`. Set a unique random `JWT_ACCESS_SECRET` (at least 32 characters) before production deployment. Never commit real credentials, private keys, production connection strings, or uploaded contract documents.
+
+The current refresh-session store uses MongoDB TTL cleanup and an in-process rate limiter. For horizontally scaled production deployment, configure a shared rate-limit store and operational session revocation/monitoring.
 
 ## Security disclosure
 
