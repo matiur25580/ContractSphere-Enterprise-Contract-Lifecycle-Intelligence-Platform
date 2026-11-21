@@ -21,7 +21,7 @@ import { Contract } from "../src/modules/contracts/contract.model.js";
 import { updateContract } from "../src/modules/contracts/contract.service.js";
 import { User } from "../src/modules/users/user.model.js";
 
-const uri = process.env.MONGODB_URI?.replace(/\\/[^/?]+(\\?.*)?$/, "/contractsphere_contract_auth$1");
+const uri = process.env.MONGODB_URI?.replace(/\/[^/?]+(\?.*)?$/, "/contractsphere_contract_auth$1");
 const newId = () => new Types.ObjectId();
 
 describe.skipIf(!uri)("contract mutation authorization — MongoDB integration", () => {
