@@ -101,6 +101,7 @@ Every agreement should have an accountable owner, a traceable document history, 
 - Provider credentials never enter browser code.
 - Full source contract text is not persisted in intelligence reports; reports store fingerprints, labels, lengths and limited evidence excerpts.
 - A MongoDB-backed durable job queue automatically starts rules-based analysis after a clean upload is registered. Jobs expose queued, processing, succeeded and failed states, retry transient failures up to three attempts with backoff, and recover expired worker leases after process restarts.
+- The authenticated `GET /api/v1/contracts/intelligence/jobs` endpoint returns the latest 30 processing jobs and tenant-scoped status totals. Members see only jobs for contracts they own or created; owners and administrators see the organization queue. The dashboard refreshes processing status every five seconds and displays attempts and terminal failure details.
 
 ### Contract version comparison
 - Compare two pasted contract texts or two stored PDF/DOCX versions belonging to the same contract.
