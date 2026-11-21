@@ -1,5 +1,8 @@
 import mongoose, { Types } from "mongoose";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const aiMock = vi.hoisted(() => ({ analyzeWithConfiguredAI: vi.fn() }));
+vi.mock("../src/modules/intelligence/ai-provider.service.js", () => aiMock);
 import { Contract } from "../src/modules/contracts/contract.model.js";
 import { User } from "../src/modules/users/user.model.js";
 import { DocumentProcessingJob } from "../src/modules/intelligence/document-job.model.js";
@@ -26,6 +29,12 @@ describe.skipIf(!uri)("document analysis report idempotency — MongoDB integrat
   });
 
   beforeEach(async () => {
+    aiMock.analyzeWithConfiguredAI.mockReset().mockResolvedValue({
+      engine: "AI_COMPATIBLE", analysisVersion: "mock-ai-v1", provider: "mock-provider",
+      modelName: "mock-model", summary: "Mock AI review completed.", findings: [],
+      extractedClauses: [], missingTerms: [],
+      riskCounts: { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 }
+    });
     const user = await User.create({
       _id: newId(), tenantId, name: "Analysis owner", email: "analysis-owner@example.test",
       passwordHash: "test-only-hash", role: "OWNER", status: "active"
@@ -69,6 +78,21 @@ describe.skipIf(!uri)("document analysis report idempotency — MongoDB integrat
     const first = await analyze();
     const retry = await analyze();
     expect(retry.id).toBe(first.id);
+    expect(await ContractIntelligenceReport.countDocuments({ jobId })).toBe(1);
+  });
+
+  it("does not call the AI provider again when the same job report already exists", async () => {
+    const source = "This agreement contains confidentiality obligations, payment terms, limitation of liability, governing law, and data protection provisions. The parties agree to review these terms annually.";
+    const first = await analyzeContract(
+      tenantId.toString(), userId.toString(), "OWNER", contractId.toString(),
+      source, "agreement.pdf", "AI_COMPATIBLE", jobId.toString()
+    );
+    const retry = await analyzeContract(
+      tenantId.toString(), userId.toString(), "OWNER", contractId.toString(),
+      source, "agreement.pdf", "AI_COMPATIBLE", jobId.toString()
+    );
+    expect(retry.id).toBe(first.id);
+    expect(aiMock.analyzeWithConfiguredAI).toHaveBeenCalledTimes(1);
     expect(await ContractIntelligenceReport.countDocuments({ jobId })).toBe(1);
   });
 
