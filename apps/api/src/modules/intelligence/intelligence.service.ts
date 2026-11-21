@@ -67,17 +67,32 @@ export async function authorizedContract(tenantId: string, userId: string, role:
   if (!["OWNER", "ADMIN"].includes(role) && contract.ownerId.toString() !== userId && contract.createdBy.toString() !== userId) throw new HttpError(403, "You do not have access to analyze this contract.", "FORBIDDEN");
   return contract;
 }
-export async function analyzeContract(tenantId: string, userId: string, role: string, contractId: string, sourceText: string, sourceLabel: string, engine: "RULE_BASED" | "AI_COMPATIBLE" = "RULE_BASED") {
+export async function analyzeContract(tenantId: string, userId: string, role: string, contractId: string, sourceText: string, sourceLabel: string, engine: "RULE_BASED" | "AI_COMPATIBLE" = "RULE_BASED", jobId?: string) {
   const contract = await authorizedContract(tenantId, userId, role, contractId);
   const result = engine === "AI_COMPATIBLE" ? await analyzeWithConfiguredAI(sourceText) : analyzeContractText(sourceText);
   const sourceFingerprint = createHash("sha256").update(sourceText.normalize("NFKC")).digest("hex");
-  const report = await ContractIntelligenceReport.create({
-    tenantId: oid(tenantId), contractId: contract._id, createdBy: oid(userId), sourceLabel,
-    sourceFingerprint, sourceLength: sourceText.length, ...result
-  });
+  const reportFilter = jobId ? { tenantId: oid(tenantId), jobId: oid(jobId) } : null;
+  if (reportFilter) {
+    const existing = await ContractIntelligenceReport.findOne(reportFilter);
+    if (existing) return existing;
+  }
+  let report;
+  try {
+    report = await ContractIntelligenceReport.create({
+      tenantId: oid(tenantId), contractId: contract._id, createdBy: oid(userId),
+      ...(jobId ? { jobId: oid(jobId) } : {}),
+      sourceLabel, sourceFingerprint, sourceLength: sourceText.length, ...result
+    });
+  } catch (error) {
+    if (jobId && error && typeof error === "object" && "code" in error && error.code === 11000) {
+      const existing = await ContractIntelligenceReport.findOne(reportFilter!);
+      if (existing) return existing;
+    }
+    throw error;
+  }
   return report;
 }
-export async function analyzeStoredDocument(tenantId: string, userId: string, role: string, contractId: string, fileId: string, engine: "RULE_BASED" | "AI_COMPATIBLE" = "RULE_BASED") {
+export async function analyzeStoredDocument(tenantId: string, userId: string, role: string, contractId: string, fileId: string, engine: "RULE_BASED" | "AI_COMPATIBLE" = "RULE_BASED", jobId?: string) {
   const contract = await authorizedContract(tenantId, userId, role, contractId);
   const file = await ContractFile.findOne({ _id: fileId, tenantId: oid(tenantId), contractId: contract._id }).lean();
   if (!file) throw new HttpError(404, "Document version not found for this contract.", "DOCUMENT_NOT_FOUND");
@@ -85,7 +100,7 @@ export async function analyzeStoredDocument(tenantId: string, userId: string, ro
   if (file.sizeBytes > MAX_DOCUMENT_BYTES) throw new HttpError(413, "The document exceeds the 10 MB analysis limit.", "DOCUMENT_TOO_LARGE");
   const buffer = await readStoredObject(file.objectKey, MAX_DOCUMENT_BYTES);
   const sourceText = await extractDocumentText(buffer, file.mimeType);
-  return analyzeContract(tenantId, userId, role, contractId, sourceText, file.originalName, engine);
+  return analyzeContract(tenantId, userId, role, contractId, sourceText, file.originalName, engine, jobId);
 }
 export async function listContractAnalyses(tenantId: string, userId: string, role: string, contractId: string) {
   const contract = await authorizedContract(tenantId, userId, role, contractId);
