@@ -4,6 +4,29 @@ import { env } from "../../config/env.js";
 
 export type MalwareScanResult = { clean: true } | { clean: false; signature: string };
 
+function readZipEntryNames(buffer: Buffer): Set<string> | null {
+  const lowerBound = Math.max(0, buffer.length - 65_557);
+  let endRecord = -1;
+  for (let offset = buffer.length - 22; offset >= lowerBound; offset--) {
+    if (buffer.readUInt32LE(offset) === 0x06054b50) { endRecord = offset; break; }
+  }
+  if (endRecord < 0 || endRecord + 22 > buffer.length) return null;
+  const entryCount = buffer.readUInt16LE(endRecord + 10);
+  const directoryOffset = buffer.readUInt32LE(endRecord + 16);
+  const names = new Set<string>();
+  let cursor = directoryOffset;
+  for (let index = 0; index < entryCount; index++) {
+    if (cursor + 46 > buffer.length || buffer.readUInt32LE(cursor) !== 0x02014b50) return null;
+    const nameLength = buffer.readUInt16LE(cursor + 28);
+    const extraLength = buffer.readUInt16LE(cursor + 30);
+    const commentLength = buffer.readUInt16LE(cursor + 32);
+    if (cursor + 46 + nameLength + extraLength + commentLength > buffer.length) return null;
+    names.add(buffer.subarray(cursor + 46, cursor + 46 + nameLength).toString("utf8"));
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+  return names;
+}
+
 export function verifyDocumentSignature(buffer: Buffer, mimeType: string): void {
   if (mimeType === "application/pdf") {
     if (buffer.length < 8 || buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
@@ -14,8 +37,8 @@ export function verifyDocumentSignature(buffer: Buffer, mimeType: string): void 
   if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
     const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b &&
       [0x03, 0x05, 0x07].includes(buffer[2]) && [0x04, 0x06, 0x08].includes(buffer[3]);
-    const directory = buffer.toString("latin1");
-    if (!isZip || !directory.includes("[Content_Types].xml") || !directory.includes("word/document.xml")) {
+    const entries = isZip ? readZipEntryNames(buffer) : null;
+    if (!entries?.has("[Content_Types].xml") || !entries.has("word/document.xml")) {
       throw new HttpError(415, "The uploaded file is not a valid DOCX document.", "DOCUMENT_SIGNATURE_INVALID");
     }
     return;
