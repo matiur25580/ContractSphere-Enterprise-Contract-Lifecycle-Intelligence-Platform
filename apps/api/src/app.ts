@@ -1,0 +1,17 @@
+import cors from "cors";
+import express from "express";
+import helmet from "helmet";
+import pinoHttp from "pino-http";
+import {env} from "./config/env.js";
+import {errorHandler} from "./common/error-handler.js";
+import {healthRouter} from "./modules/health/health.routes.js";
+export const app=express();
+app.disable("x-powered-by");
+app.use(helmet());
+app.use(cors({origin:env.WEB_ORIGIN,credentials:true}));
+app.use(express.json({limit:"1mb"}));
+app.use(pinoHttp({level:env.LOG_LEVEL}));
+app.get("/",(_req,res)=>res.json({success:true,data:{name:"ContractSphere API",version:"0.1.0"}}));
+app.use(`${env.API_PREFIX}/health`,healthRouter);
+app.use((_req,res)=>res.status(404).json({success:false,error:{code:"NOT_FOUND",message:"Route not found."}}));
+app.use(errorHandler);
