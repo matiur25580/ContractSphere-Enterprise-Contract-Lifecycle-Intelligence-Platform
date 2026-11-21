@@ -130,4 +130,20 @@ describe.skipIf(!uri)("workflow service — MongoDB integration", () => {
     expect(rejected.active).toBe(false);
     expect((await Contract.findById(contract._id))?.status).toBe("DRAFT");
   });
+
+  it("rolls back a terminal workflow decision when the contract state cannot transition", async () => {
+    const contract = await createContract(ownerId);
+    const definition = await createDefinition([approverA], "ANY");
+    const instance = await submitContractForApproval(tenantId.toString(), ownerId.toString(), "OWNER", contract.id, definition.id);
+    await Contract.updateOne({ _id: contract._id, tenantId, status: "IN_REVIEW" }, { $set: { status: "ARCHIVED" } });
+
+    await expect(decideOnWorkflow(tenantId.toString(), approverA.toString(), instance.id, { decision: "APPROVE" }))
+      .rejects.toMatchObject({ statusCode: 409, code: "CONTRACT_STATE_CONFLICT" });
+
+    const storedWorkflow = await WorkflowInstance.findById(instance._id).lean();
+    expect(storedWorkflow?.status).toBe("IN_PROGRESS");
+    expect(storedWorkflow?.active).toBe(true);
+    expect(storedWorkflow?.stages[0]?.decisions).toHaveLength(0);
+    expect((await Contract.findById(contract._id))?.status).toBe("ARCHIVED");
+  });
 });
