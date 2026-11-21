@@ -15,7 +15,7 @@ const contractFields = z.object({
   contractValue: z.number().min(0).max(1_000_000_000_000).optional(),
   tags: z.array(z.string().trim().min(1).max(32)).max(20).default([])
 }).strict();
-const validateDateRange = (value: { startDate?: Date; endDate?: Date }, ctx: z.RefinementCtx) => {
+const validateDateRange = (value: { startDate?: Date | undefined; endDate?: Date | undefined }, ctx: z.RefinementCtx) => {
   if (value.startDate && value.endDate && value.endDate < value.startDate) {
     ctx.addIssue({ code: "custom", path: ["endDate"], message: "End date must be on or after the start date." });
   }
