@@ -61,11 +61,11 @@ async function claimJob() {
   const now = new Date();
   const expiredLease = new Date(now.getTime() - LEASE_MS);
   await DocumentProcessingJob.updateMany(
-    { status: "PROCESSING", attempts: { $gte: 3 }, lockedAt: { $lte: expiredLease } },
+    { status: "PROCESSING", $expr: { $gte: ["$attempts", "$maxAttempts"] }, lockedAt: { $lte: expiredLease } },
     { $set: { status: "FAILED", errorCode: "WORKER_LEASE_EXPIRED", errorMessage: "The worker stopped before completing the final processing attempt.", completedAt: now }, $unset: { lockedAt: 1, lockedBy: 1 } }
   );
   return DocumentProcessingJob.findOneAndUpdate({
-    attempts: { $lt: 3 },
+    $expr: { $lt: ["$attempts", "$maxAttempts"] },
     $or: [
       { status: "QUEUED", nextRunAt: { $lte: now } },
       { status: "PROCESSING", lockedAt: { $lte: expiredLease } }
