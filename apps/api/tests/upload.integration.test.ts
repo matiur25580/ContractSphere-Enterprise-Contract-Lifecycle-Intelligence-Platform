@@ -28,7 +28,7 @@ import { completeDocumentUpload } from "../src/modules/contracts/contract.servic
 import { DocumentProcessingJob } from "../src/modules/intelligence/document-job.model.js";
 import { User } from "../src/modules/users/user.model.js";
 
-const uri = process.env.MONGODB_URI?.replace(/\/[^/?]+(?=\\?|$)/, "/contractsphere_uploads");
+const uri = process.env.MONGODB_URI?.replace(/\/[^/?]+(\?.*)?$/, "/contractsphere_uploads$1");
 const newId = () => new Types.ObjectId();
 
 describe.skipIf(!uri)("document upload completion — MongoDB integration", () => {
