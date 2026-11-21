@@ -54,7 +54,7 @@ async function loadWorkflowData() {
     ]);
     workflowDefinitions.value = definitions.definitions;
     approvalTasks.value = tasks.tasks;
-    if (!selectedWorkflowId.value && workflowDefinitions.value.length) selectedWorkflowId.value = workflowDefinitions.value[0]._id;
+    if (!selectedWorkflowId.value && workflowDefinitions.value.length) selectedWorkflowId.value = workflowDefinitions.value[0]?._id ?? "";
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'Could not load approval workflows.'; }
 }
 
