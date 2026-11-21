@@ -91,6 +91,17 @@ async function main() {
   await sourceTextarea.fill(source);
   await sourceTextarea.dispatchEvent("input");
   await sourceTextarea.dispatchEvent("change");
+  // Vue's v-model can lag behind programmatic browser input in headless CI.
+  // Set the component's public reactive state as a deterministic fallback so
+  // this screenshot fixture tests the dashboard rather than browser event quirks.
+  await page.evaluate(({ contractId, sourceText }) => {
+   const app = document.querySelector("#app")?.__vue_app__;
+   const state = app?._instance?.setupState;
+   if (!state) throw new Error("Could not access the mounted Vue dashboard state.");
+   state.intelligenceContractId = contractId;
+   state.intelligenceSourceLabel = "Enterprise services agreement — showcase fixture";
+   state.intelligenceSource = sourceText;
+  }, { contractId: id, sourceText: source });
   await page.waitForTimeout(250);
   const selectedContract = await page.locator(".intelligence-panel select").first().inputValue();
   const sourceLength = await page.locator(".intelligence-panel form textarea").first().inputValue().then(value => value.trim().length);
