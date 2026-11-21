@@ -102,7 +102,7 @@ async function main() {
   if (selectedContract !== id || sourceLength < 100 || reactiveDebug.contractId !== id || reactiveDebug.sourceLength < 100) {
    throw new Error("Showcase form values were not synchronized before submission.");
   }
-  await page.locator(".intelligence-panel form").evaluate(form => {
+  await page.locator(".intelligence-panel form").first().evaluate(form => {
    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
   await page.waitForSelector(".intelligence-results");
