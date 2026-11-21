@@ -1,4 +1,4 @@
-import { Router, type RequestHandler } from "express";
+import { Router, type RequestHandler } from "express";\nimport rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { asyncHandler } from "../../common/async-handler.js";
 import { HttpError } from "../../common/http-error.js";
@@ -44,12 +44,12 @@ contractRouter.patch("/:contractId", validate(updateContractSchema), asyncHandle
   await audit(req, "CONTRACT_UPDATED", contract.id, `Updated contract ${contract.contractNumber}`, { status: contract.status });
   res.json({ success: true, data: { contract } });
 }));
-contractRouter.post("/:contractId/uploads", validate(uploadIntentSchema), asyncHandler(async (req, res) => {
+contractRouter.post("/:contractId/uploads", uploadLimiter, validate(uploadIntentSchema), asyncHandler(async (req, res) => {
   const upload = await createDocumentUpload(req.auth!.tenantId, req.auth!.userId, idParam(req, "contractId"), req.body);
   await audit(req, "DOCUMENT_UPLOAD_REQUESTED", idParam(req, "contractId"), "Requested a contract document upload");
   res.status(201).json({ success: true, data: { upload } });
 }));
-contractRouter.post("/uploads/:uploadId/complete", asyncHandler(async (req, res) => {
+contractRouter.post("/uploads/:uploadId/complete", uploadLimiter, asyncHandler(async (req, res) => {
   const result = await completeDocumentUpload(req.auth!.tenantId, req.auth!.userId, idParam(req, "uploadId"), req.auth!.role);
   await audit(req, "DOCUMENT_VERSION_ADDED", result.file.contractId.toString(), `Added document version ${result.file.version}`, { version: result.file.version, sizeBytes: result.file.sizeBytes });
   res.status(201).json({ success: true, data: { file: result.file, processingJob: { id: result.job.id, status: result.job.status } } });
