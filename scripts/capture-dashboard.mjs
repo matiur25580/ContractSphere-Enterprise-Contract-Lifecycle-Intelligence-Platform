@@ -56,6 +56,19 @@ async function main() {
  const browser = await chromium.launch({ headless: true });
  try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, deviceScaleFactor: 1 });
+  const browserErrors = [];
+  const analysisRequests = [];
+  page.on("pageerror", error => browserErrors.push(error.message));
+  page.on("console", message => { if (message.type() === "error") browserErrors.push(message.text()); });
+  page.on("requestfailed", request => {
+   if (request.url().includes("/intelligence/analyze")) analysisRequests.push({ url:request.url(), failure:request.failure()?.errorText });
+  });
+  page.on("response", async response => {
+   if (!response.url().includes("/intelligence/analyze")) return;
+   let body = "";
+   try { body = (await response.text()).slice(0, 1200); } catch {}
+   analysisRequests.push({ url:response.url(), status:response.status(), body });
+  });
   await page.route("**/api/v1/**", async route => {
    const request = route.request();
    const url = new URL(request.url());
@@ -105,7 +118,13 @@ async function main() {
   await page.locator(".intelligence-panel form").first().evaluate(form => {
    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
-  await page.waitForSelector(".intelligence-results");
+  const analysisOutcome = await Promise.race([
+   page.locator(".intelligence-results").waitFor({ state:"visible", timeout:15000 }).then(() => "results"),
+   page.locator(".global-message[role=alert]").waitFor({ state:"visible", timeout:15000 }).then(() => "alert")
+  ]).catch(() => "timeout");
+  const visibleError = await page.locator(".global-message[role=alert]").first().textContent().catch(() => "");
+  process.stdout.write(`Analysis diagnostics: outcome=${analysisOutcome}, requests=${JSON.stringify(analysisRequests)}, browserErrors=${JSON.stringify(browserErrors)}, visibleError=${JSON.stringify(visibleError)}\\n`);
+  if (analysisOutcome !== "results") throw new Error("Contract analysis did not render results; see request and browser diagnostics above.");
   const compareForm = page.locator(".comparison-workspace form");
   await compareForm.locator("textarea").nth(0).fill(source.replace("The supplier's liability under this agreement shall be unlimited.", "The supplier's aggregate liability shall not exceed fees paid in the preceding twelve months."));
   await compareForm.locator("textarea").nth(1).fill(source);
