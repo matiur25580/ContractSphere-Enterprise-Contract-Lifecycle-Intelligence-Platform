@@ -290,3 +290,14 @@ This section records findings confirmed during the subsequent PR and source revi
 - A MongoDB integration test uses a mocked AI provider and confirms two sequential calls for the same job ID create one report and invoke the provider once.
 - PR #25 verification run [44933542603](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44933542603) completed successfully, including dependency audit, typecheck, build and API integration tests.
 - F-09 remains partially mitigated, not fully closed: if two workers both begin analysis before either has committed a report, external provider calls can still overlap. The lease heartbeat reduces this window; report persistence remains idempotent.
+
+
+## Verification update — tenant-scoped contract and document access tests (2026-11-21)
+
+- PR #27 merged as `3f3699597055759e3da4455e55575c3034d0b146`.
+- Added MongoDB-backed tests proving tenant scoping for contract detail and document-version reads.
+- Verified a cross-tenant file identifier cannot generate a signed download URL.
+- Verified document-job status access enforces tenant scope and MEMBER owner/creator authorization.
+- Verified MEMBER job lists are limited to contracts they own or created, while OWNER job lists include the tenant queue.
+- PR #27 verification run [44933918772](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44933918772) completed successfully, including dependency audit, typecheck, build and MongoDB integration tests.
+- Storage URL creation was mocked in these tests. Actual S3 credentials, bucket policy, signed URL constraints and cross-tenant object-storage access have not been tested against a live bucket.
