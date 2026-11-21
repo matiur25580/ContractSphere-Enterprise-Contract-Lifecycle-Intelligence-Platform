@@ -21,7 +21,13 @@ interface ApprovalTask { _id: string; definitionName: string; currentStage: { na
 interface ObligationItem { _id: string; title: string; type: string; status: string; priority: string; dueDate: string; contractId: { title: string; contractNumber: string } | string; ownerId: { name: string } | string; }
 interface RenewalItem { _id: string; expiryDate: string; noticeDeadline: string; noticePeriodDays: number; renewalType: string; status: string; contractId: { title: string; contractNumber: string; counterparty: string } | null; }
 interface VendorItem { _id: string; legalName: string; displayName?: string; category: string; status: string; country?: string; industry?: string; riskLevel: string; riskScore: number; contacts: Array<{ name: string; email: string; primary: boolean }>; certifications: Array<{ name: string; status: string }> }
+interface NotificationItem { _id: string; type: string; title: string; body: string; link?: string; readAt: string | null; createdAt: string }
+
 const auth = useAuthStore();
+const notifications = ref<NotificationItem[]>([]);
+const unreadNotifications = ref(0);
+const notificationsOpen = ref(false);
+const loadingNotifications = ref(false);
 const mode = ref<"login" | "register">("login");
 const errorMessage = ref("");
 const successMessage = ref("");
@@ -57,6 +63,35 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const result = await response.json() as { success: boolean; data?: T; error?: { message?: string } };
   if (!response.ok || !result.success || result.data === undefined) throw new Error(result.error?.message ?? "The request could not be completed.");
   return result.data;
+}
+
+async function loadNotifications() {
+  if (!auth.accessToken) return;
+  loadingNotifications.value = true;
+  try {
+    const result = await api<{ items: NotificationItem[]; unread: number }>("/notifications?page=1&limit=20");
+    notifications.value = result.items;
+    unreadNotifications.value = result.unread;
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load notifications."; }
+  finally { loadingNotifications.value = false; }
+}
+
+async function markNotificationRead(item: NotificationItem) {
+  if (!item.readAt) {
+    try {
+      await api(`/notifications/${item._id}/read`, { method: "PATCH" });
+      item.readAt = new Date().toISOString();
+      unreadNotifications.value = Math.max(0, unreadNotifications.value - 1);
+    } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not update notification."; }
+  }
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await api("/notifications/read-all", { method: "PATCH" });
+    notifications.value = notifications.value.map(item => ({ ...item, readAt: item.readAt ?? new Date().toISOString() }));
+    unreadNotifications.value = 0;
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not update notifications."; }
 }
 
 async function loadWorkflowData() {
@@ -169,7 +204,7 @@ onMounted(async () => {
   await auth.restore();
   if (auth.user) {
     if (!workflowForm.approverUserIds) workflowForm.approverUserIds = auth.user.id;
-    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors()]);
+    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors(), loadNotifications()]);
   }
 });
 
@@ -286,6 +321,9 @@ async function downloadLatest(contract: ContractSummary) {
 async function signOut() {
   await auth.logout();
   contracts.value = [];
+  notifications.value = [];
+  unreadNotifications.value = 0;
+  notificationsOpen.value = false;
   mode.value = "login";
 }
 </script>
@@ -295,6 +333,19 @@ async function signOut() {
     <nav class="topbar">
       <a class="brand" href="/"><span class="brand-mark">C</span><span>Contract<span class="brand-light">Sphere</span></span></a>
       <span class="environment">{{ auth.user ? auth.user.organization.name : "ENTERPRISE CLM PLATFORM" }}</span>
+      <div v-if="auth.user" class="notification-area">
+        <button class="notification-trigger" type="button" :aria-expanded="notificationsOpen" @click="notificationsOpen = !notificationsOpen; notificationsOpen && loadNotifications()">
+          <span aria-hidden="true">♧</span> Notifications <span v-if="unreadNotifications" class="notification-count">{{ unreadNotifications > 99 ? "99+" : unreadNotifications }}</span>
+        </button>
+        <section v-if="notificationsOpen" class="notification-popover" aria-label="Notifications">
+          <div class="notification-heading"><strong>Activity inbox</strong><button type="button" @click="markAllNotificationsRead" :disabled="!unreadNotifications">Mark all read</button></div>
+          <div v-if="loadingNotifications" class="notification-empty">Loading notifications…</div>
+          <div v-else-if="!notifications.length" class="notification-empty">You're all caught up.</div>
+          <button v-for="item in notifications" :key="item._id" type="button" class="notification-item" :class="{ unread: !item.readAt }" @click="markNotificationRead(item)">
+            <span class="notification-dot"></span><span class="notification-copy"><strong>{{ item.title }}</strong><small>{{ item.body }}</small><small>{{ new Date(item.createdAt).toLocaleString() }}</small></span>
+          </button>
+        </section>
+      </div>
     </nav>
 
     <div v-if="!auth.ready" class="loading-state">Preparing your secure workspace…</div>
