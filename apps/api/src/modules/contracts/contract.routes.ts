@@ -1,4 +1,5 @@
-import { Router, type RequestHandler } from "express";\nimport rateLimit from "express-rate-limit";
+import { Router, type RequestHandler } from "express";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { asyncHandler } from "../../common/async-handler.js";
 import { HttpError } from "../../common/http-error.js";
