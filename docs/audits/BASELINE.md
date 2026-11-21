@@ -301,3 +301,22 @@ This section records findings confirmed during the subsequent PR and source revi
 - Verified MEMBER job lists are limited to contracts they own or created, while OWNER job lists include the tenant queue.
 - PR #27 verification run [44933918772](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44933918772) completed successfully, including dependency audit, typecheck, build and MongoDB integration tests.
 - Storage URL creation was mocked in these tests. Actual S3 credentials, bucket policy, signed URL constraints and cross-tenant object-storage access have not been tested against a live bucket.
+
+
+## Verification update — refresh-token family replay protection (2026-11-21)
+
+### F-08 remediation
+
+- PR #30 merged as `e3d844736fa637d1ca175297e2918246d2809d06`.
+- Refresh sessions now carry a family identifier across each rotation chain.
+- Token consumption and successor creation are performed in one MongoDB transaction.
+- Reuse of a revoked token triggers revocation of every session in its family, including a successor already issued by a successful rotation.
+- Concurrent refresh attempts are serialized by transactional writes; the losing replay revokes the winning successor.
+- MongoDB integration tests cover sequential replay and concurrent refresh races.
+- PR #30 verification run [44934234586](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44934234586) completed successfully, including dependency audit, typecheck, build and API integration tests.
+
+### Residual authentication limitations
+
+- Existing refresh sessions created before this change do not have a family ID until they are successfully rotated; a legacy revoked token without a family ID cannot revoke any successor created before family tracking existed.
+- Access JWTs are still validated by signature and claims in middleware without a per-request user/tenant status lookup. Deactivation/revocation of an already-issued access token remains bounded by its short expiry.
+- Refresh-family revocation does not revoke access JWTs already issued; the accepted access-token revocation window still needs an explicit policy decision or a session-version/revocation check if immediate invalidation is required.
