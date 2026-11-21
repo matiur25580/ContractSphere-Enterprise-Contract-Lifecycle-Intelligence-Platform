@@ -100,6 +100,7 @@ Every agreement should have an accountable owner, a traceable document history, 
 - AI output is schema-validated; a finding is kept only when its exact quoted evidence appears in the source text.
 - Provider credentials never enter browser code.
 - Full source contract text is not persisted in intelligence reports; reports store fingerprints, labels, lengths and limited evidence excerpts.
+- A MongoDB-backed durable job queue automatically starts rules-based analysis after a clean upload is registered. Jobs expose queued, processing, succeeded and failed states, retry transient failures up to three attempts with backoff, and recover expired worker leases after process restarts.
 
 ### Contract version comparison
 - Compare two pasted contract texts or two stored PDF/DOCX versions belonging to the same contract.
@@ -175,7 +176,8 @@ The project uses a **TypeScript modular monolith**. Domain modules are separated
 3. Domain services scope MongoDB reads and writes to the authenticated tenant.
 4. Contract files are uploaded directly to private object storage using a short-lived signed URL.
 5. The API verifies object metadata before registering a version.
-6. Intelligence and comparison services extract text, calculate source fingerprints and produce bounded, evidence-linked outputs.
+6. Clean uploaded documents are registered as immutable versions and enqueue durable analysis jobs; a MongoDB-backed worker claims jobs with expiring leases, retries transient failures, and persists report IDs and job status.
+7. Intelligence and comparison services extract text, calculate source fingerprints and produce bounded, evidence-linked outputs.
 7. Security-sensitive actions are written to the audit collection.
 
 ---
@@ -270,10 +272,10 @@ Registration requires organization name/slug, user name/email and a password of 
 | GET | /contracts/:contractId | Read contract and document versions |
 | PATCH | /contracts/:contractId | Update contract metadata |
 | POST | /contracts/:contractId/uploads | Create short-lived upload intent and signed URL |
-| POST | /contracts/uploads/:uploadId/complete | Verify and register uploaded version |
+| POST | /contracts/uploads/:uploadId/complete | Verify, register uploaded version and enqueue background analysis |
 | GET | /contracts/:contractId/versions/:fileId/download | Create short-lived download URL |
 
-Contract search supports query, status, type, counterparty, pagination and sorting. Upload requests accept PDF/DOCX and are limited to 25 MiB by the upload workflow. Completion checks the file signature, scans the bytes through ClamAV INSTREAM, and registers only a clean result. Infected files and files with invalid signatures are moved to the private `quarantine/` prefix and generate audit events. If the scanner is unavailable or returns an error, the file is not registered. The intelligence extractor applies a stricter 10 MiB limit.
+Contract search supports query, status, type, counterparty, pagination and sorting. Upload requests accept PDF/DOCX and are limited to 25 MiB by the upload workflow. Completion checks the file signature, scans the bytes through ClamAV INSTREAM, and registers only a clean result. A registered version automatically enters the durable analysis queue; the upload response includes `processingJob.id` and `processingJob.status`. Infected files and files with invalid signatures are moved to the private `quarantine/` prefix and generate audit events. If the scanner is unavailable or returns an error, the file is not registered. The intelligence extractor applies a stricter 10 MiB limit.
 
 ### Approval workflows
 
@@ -329,6 +331,7 @@ Contract search supports query, status, type, counterparty, pagination and sorti
 | POST | /contracts/:contractId/intelligence/analyze | Analyze pasted contract text |
 | POST | /contracts/:contractId/intelligence/documents/:fileId/analyze | Extract and analyze stored PDF/DOCX |
 | GET | /contracts/:contractId/intelligence | Read latest 20 analysis reports |
+| GET | /contracts/:contractId/intelligence/jobs/:jobId | Read authorized background-analysis job status |
 | POST | /contracts/:contractId/intelligence/compare | Compare two pasted texts or two stored document versions |
 | GET | /contracts/:contractId/intelligence/comparisons | Read latest 20 version comparisons |
 
@@ -365,6 +368,7 @@ These are pattern-based signals, not complete legal analysis. Clause wording, ju
 - Maximum extracted text: 30,000 characters.
 - Not supported: OCR for scanned/image-only PDF, encrypted documents, malware scanning, advanced table reconstruction or guaranteed extraction of complex layouts.
 - Upload metadata verification is not a substitute for file-signature validation or malware scanning.
+- Background processing is durable only when MongoDB is configured and reachable. The API starts one worker process per API instance; job claiming uses atomic MongoDB updates and expiring leases to recover after crashes. Retries are bounded to three attempts.
 
 ### Comparison methodology
 - Sentence-level additions/removals use normalized exact sentence matching.
