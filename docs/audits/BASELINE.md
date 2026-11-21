@@ -281,3 +281,12 @@ This section records findings confirmed during the subsequent PR and source revi
 - The integration suite validates report deduplication and other service behavior on MongoDB, but does not yet run a multi-process stress test with deliberately delayed analysis crossing the lease boundary.
 - F-09 is therefore **mitigated for persisted report duplication**, not fully closed for duplicate processing cost or every possible external side effect.
 - No real ClamAV/S3 infrastructure test, production worker load test, penetration test, or deployment is claimed.
+
+
+## Verification update — avoid repeated provider calls after report commit (2026-11-21)
+
+- PR #25 merged as `bde4d129d00dfeca649fcb22ef49a595896bf64f`.
+- The worker's job-keyed report lookup now occurs before invoking the deterministic or AI analysis engine. A retry after a report has committed therefore reuses that report without re-running analysis or calling the external AI provider again.
+- A MongoDB integration test uses a mocked AI provider and confirms two sequential calls for the same job ID create one report and invoke the provider once.
+- PR #25 verification run [44933542603](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44933542603) completed successfully, including dependency audit, typecheck, build and API integration tests.
+- F-09 remains partially mitigated, not fully closed: if two workers both begin analysis before either has committed a report, external provider calls can still overlap. The lease heartbeat reduces this window; report persistence remains idempotent.
