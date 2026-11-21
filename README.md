@@ -411,7 +411,7 @@ These are pattern-based signals, not complete legal analysis. Clause wording, ju
 - End-to-end tests for tenant isolation, access control, storage and workflow concurrency.
 - Deployment-specific TLS, CORS, CSP, cookie and network policies.
 
-A passing CI build is not a production security certification.
+A passing CI build is not a production security certification. Before an operator-managed release, follow the [production-readiness checklist](docs/PRODUCTION_READINESS_CHECKLIST.md).
 
 ---
 
