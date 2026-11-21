@@ -15,6 +15,7 @@ describe.skipIf(!uri)("audit and template governance — MongoDB integration", (
   const tenantB = newId();
   let ownerA: Types.ObjectId;
   let adminA: Types.ObjectId;
+  let adminA2: Types.ObjectId;
   let ownerB: Types.ObjectId;
 
   beforeAll(async () => {
@@ -32,13 +33,15 @@ describe.skipIf(!uri)("audit and template governance — MongoDB integration", (
       Tenant.create({ _id: tenantA, name: "Audit tenant A", slug: "audit-a-" + newId().toString() }),
       Tenant.create({ _id: tenantB, name: "Audit tenant B", slug: "audit-b-" + newId().toString() })
     ]);
-    const [aOwner, aAdmin, bOwner] = await Promise.all([
+    const [aOwner, aAdmin, aAdmin2, bOwner] = await Promise.all([
       User.create({ _id: newId(), tenantId: tenantA, name: "Owner A", email: "owner-a@example.test", passwordHash: "test-hash", role: "OWNER", status: "active" }),
       User.create({ _id: newId(), tenantId: tenantA, name: "Admin A", email: "admin-a@example.test", passwordHash: "test-hash", role: "ADMIN", status: "active" }),
+      User.create({ _id: newId(), tenantId: tenantA, name: "Admin A2", email: "admin-a2@example.test", passwordHash: "test-hash", role: "ADMIN", status: "active" }),
       User.create({ _id: newId(), tenantId: tenantB, name: "Owner B", email: "owner-b@example.test", passwordHash: "test-hash", role: "OWNER", status: "active" })
     ]);
     ownerA = aOwner._id;
     adminA = aAdmin._id;
+    adminA2 = aAdmin2._id;
     ownerB = bOwner._id;
   });
 
@@ -83,12 +86,22 @@ describe.skipIf(!uri)("audit and template governance — MongoDB integration", (
     expect((await ContractTemplate.findById(template._id))?.status).toBe("PENDING_APPROVAL");
   });
 
+  it("rejects a valid approver identity from a different tenant", async () => {
+    const template = await createTemplate(tenantA, ownerA);
+    await submitTemplate(tenantA.toString(), template.id);
+    await expect(approveTemplate(tenantA.toString(), ownerB.toString(), template.id))
+      .rejects.toMatchObject({ statusCode: 403, code: "INVALID_TEMPLATE_APPROVER" });
+    expect((await ContractTemplate.findById(template._id))?.status).toBe("PENDING_APPROVAL");
+    await expect(approveTemplate(tenantA.toString(), adminA.toString(), template.id))
+      .resolves.toMatchObject({ status: "APPROVED" });
+  });
+
   it("atomically approves a pending template and rejects a competing approval", async () => {
     const template = await createTemplate(tenantA, ownerA);
     await submitTemplate(tenantA.toString(), template.id);
     const outcomes = await Promise.allSettled([
       approveTemplate(tenantA.toString(), adminA.toString(), template.id),
-      approveTemplate(tenantA.toString(), ownerB.toString(), template.id)
+      approveTemplate(tenantA.toString(), adminA2.toString(), template.id)
     ]);
     const successes = outcomes.filter(item => item.status === "fulfilled");
     expect(successes).toHaveLength(1);
