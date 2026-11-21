@@ -94,13 +94,14 @@ async function main() {
   // Vue's v-model can lag behind programmatic browser input in headless CI.
   // Set the component's public reactive state as a deterministic fallback so
   // this screenshot fixture tests the dashboard rather than browser event quirks.
-  await page.evaluate(({ contractId, sourceText }) => {
-   const app = document.querySelector("#app")?.__vue_app__;
-   const state = app?._instance?.setupState;
-   if (!state) throw new Error("Could not access the mounted Vue dashboard state.");
-   state.intelligenceContractId = contractId;
-   state.intelligenceSourceLabel = "Enterprise services agreement — showcase fixture";
-   state.intelligenceSource = sourceText;
+  await page.evaluate(async ({ contractId, sourceText }) => {
+   const instance = document.querySelector("#app")?.__vue_app__?._instance;
+   const dashboard = instance?.proxy;
+   if (!dashboard) throw new Error("Could not access the mounted Vue dashboard instance.");
+   dashboard.intelligenceContractId = contractId;
+   dashboard.intelligenceSourceLabel = "Enterprise services agreement — showcase fixture";
+   dashboard.intelligenceSource = sourceText;
+   await dashboard.$nextTick();
   }, { contractId: id, sourceText: source });
   await page.waitForTimeout(250);
   const selectedContract = await page.locator(".intelligence-panel select").first().inputValue();
