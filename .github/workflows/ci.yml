@@ -37,9 +37,9 @@ jobs:
           echo "MongoDB replica set did not become primary"
           exit 1
       - name: Install dependencies
-        run: npm install
-      - name: Production dependency security audit
-        run: npm audit --omit=dev --audit-level=high
+        run: npm ci
+      - name: Full dependency security audit
+        run: npm audit --audit-level=high
       - name: Typecheck
         run: npm run typecheck
       - name: Build
