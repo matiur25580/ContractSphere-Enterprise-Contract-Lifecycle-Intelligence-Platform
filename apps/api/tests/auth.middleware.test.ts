@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const dbMocks = vi.hoisted(() => ({ userFindOne: vi.fn(), tenantExists: vi.fn() }));
+const dbMocks = vi.hoisted(() => ({ userFindOne: vi.fn(), tenantExists: vi.fn(), refreshSessionExists: vi.fn() }));
 vi.mock("../src/modules/users/user.model.js", () => ({ User: { findOne: dbMocks.userFindOne } }));
 vi.mock("../src/modules/tenants/tenant.model.js", () => ({ Tenant: { exists: dbMocks.tenantExists } }));
+vi.mock("../src/modules/auth/refresh-session.model.js", () => ({ RefreshSession: { exists: dbMocks.refreshSessionExists } }));
 import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 import { env } from "../src/config/env.js";
@@ -28,6 +29,7 @@ describe("requireAuth middleware", () => {
   beforeEach(() => {
     dbMocks.userFindOne.mockReset().mockImplementation(() => ({ select: () => ({ lean: async () => ({ role: "MEMBER" }) }) }));
     dbMocks.tenantExists.mockReset().mockResolvedValue({ _id: validClaims.tenantId });
+    dbMocks.refreshSessionExists.mockReset().mockResolvedValue({ _id: "active-session" });
   });
   it("rejects requests without a bearer token", async () => {
     const req = requestWithAuthorization();
@@ -83,6 +85,14 @@ describe("requireAuth middleware", () => {
     const next = vi.fn<NextFunction>();
     await requireAuth(req, {} as Response, next);
     expect(req.auth?.role).toBe("OWNER");
+  });
+
+  it("rejects access tokens whose refresh-token family has been revoked", async () => {
+    dbMocks.refreshSessionExists.mockResolvedValueOnce(null);
+    const req = requestWithAuthorization(`Bearer ${signedToken({ ...validClaims, familyId: "revoked-family" })}`);
+    const next = vi.fn<NextFunction>();
+    await requireAuth(req, {} as Response, next);
+    expect(next.mock.calls[0]?.[0]).toMatchObject({ statusCode: 401, code: "SESSION_REVOKED" });
   });
 
   it("rejects a disabled user or suspended tenant immediately", async () => {
