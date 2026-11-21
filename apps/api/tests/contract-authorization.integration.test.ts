@@ -98,6 +98,11 @@ describe.skipIf(!uri)("contract mutation authorization — MongoDB integration",
     expect(updated.description).toBe("Admin update");
   });
 
+  it("allows an organization owner to update another member's contract", async () => {
+    const updated = await updateContract(tenantId.toString(), ownerId.toString(), "OWNER", ownedContractId.toString(), { description: "Owner update" });
+    expect(updated.description).toBe("Owner update");
+  });
+
   it("hides a cross-tenant contract identifier from an authenticated owner", async () => {
     await expect(updateContract(otherTenantId.toString(), foreignOwnerId.toString(), "OWNER", ownedContractId.toString(), { description: "Cross-tenant change" }))
       .rejects.toMatchObject({ statusCode: 404, code: "CONTRACT_NOT_FOUND" });
