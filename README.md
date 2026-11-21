@@ -4,7 +4,7 @@
 
 ContractSphere is a multi-tenant contract lifecycle management (CLM) platform for creating, reviewing, approving, executing, monitoring, and analyzing business agreements.
 
-> Status: authentication, contract repository, multi-stage approval workflows, and initial obligations/renewal tracking are implemented. Contract intelligence and production hardening remain in progress.
+> Status: authentication, contract repository, multi-stage approval workflows, obligations/renewals, and initial vendor intelligence are implemented. AI contract intelligence and production hardening remain in progress.
 
 ## Product vision
 
@@ -16,7 +16,7 @@ Give legal, procurement, finance, and business teams one secure system of record
 - Contract repository, metadata, document versions, and controlled document access.
 - Reusable templates and clause library.
 - Configurable multi-stage approval workflows, delegation, and SLA escalation.
-- Tenant-scoped obligation tracking, renewal calendars, notice deadlines, and counterparty management.
+- Tenant-scoped obligation tracking, renewal calendars, notice deadlines, and vendor/counterparty intelligence.
 - AI-assisted summaries, clause extraction, risk signals, and comparisons with source-grounded evidence and human review.
 - Append-oriented audit events, operational analytics, notifications, and exports.
 
@@ -85,7 +85,7 @@ All routes require `Authorization: Bearer <accessToken>` and are prefixed with `
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/contracts` | Create a contract record |
+| POST | `/contracts` | Create a contract record, optionally linked to an active vendor using `vendorId` |
 | GET | `/contracts` | Search/filter contracts with pagination |
 | GET | `/contracts/:contractId` | Retrieve metadata and version history |
 | PATCH | `/contracts/:contractId` | Update contract metadata/status |
@@ -132,6 +132,22 @@ Obligations support PAYMENT, DELIVERABLE, SLA, COMPLIANCE, NOTICE, and OTHER typ
 
 Renewal schedules record expiry date, notice period, derived notice deadline, renewal type, owner, and lifecycle status. The notice deadline is calculated server-side as expiry date minus notice-period days. Upcoming, notice-due, in-progress, renewed, terminated, and expired states are exposed. These endpoints provide tracking only: automated email/in-app reminders and durable scheduled jobs are not implemented yet.
 
+## Vendor and counterparty API
+
+All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/vendors` | Create a vendor/counterparty profile (OWNER/ADMIN) |
+| GET | `/vendors` | Search and filter tenant vendors |
+| GET | `/vendors/:vendorId/overview` | View linked contracts, contract value, obligations, renewals, and compliance status |
+| PATCH | `/vendors/:vendorId` | Update profile, contacts, certifications, aliases, tags, and status (OWNER/ADMIN) |
+| POST | `/vendors/:vendorId/assessments` | Record a human-reviewed risk assessment (OWNER/ADMIN) |
+
+Vendor profiles include legal/display names, normalized aliases, category, industry, country, website, tax reference, contacts, certifications, and lifecycle status. Risk scores are human-entered and mapped to LOW (0–29), MEDIUM (30–59), HIGH (60–79), or CRITICAL (80–100); assessment history records reviewer, score, factors, notes, and timestamp. Certification expiry is surfaced as EXPIRED when its date has passed. These features do not perform sanctions, credit, cyber-security, or regulatory screening automatically.
+
+Contracts can optionally link to an active vendor profile through `vendorId`. The vendor overview also matches legacy contract counterparty names and aliases for gradual adoption. All vendor and linked portfolio queries are scoped to the authenticated tenant. Vendor creation, profile changes, and risk assessments are restricted to OWNER/ADMIN.
+
 ## Engineering principles
 
 1. Enforce tenant scope on the server for every tenant-owned resource.
@@ -152,7 +168,7 @@ Renewal schedules record expiry date, notice period, derived notice deadline, re
 - [x] Configurable multi-stage approval workflow engine with ANY/ALL approvers and decision history
 - [ ] Templates and clause library
 - [x] Initial obligations and renewal tracking with derived notice deadlines
-- [ ] Vendor/counterparty management and automated notifications
+- [x] Vendor/counterparty directory, contract linkage, compliance expiry visibility, and human-reviewed risk assessments\n- [ ] Automated notifications and durable scheduled jobs
 - [ ] AI-assisted contract intelligence with evidence references
 - [ ] Audit, analytics, exports, integrations, and production hardening
 

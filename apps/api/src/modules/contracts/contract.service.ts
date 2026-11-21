@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Types } from "mongoose";
 import { HttpError } from "../../common/http-error.js";
 import { User } from "../users/user.model.js";
+import { Vendor } from "../vendors/vendor.model.js";
 import { Contract } from "./contract.model.js";
 import { ContractFile } from "./contract-file.model.js";
 import { UploadIntent } from "./upload-intent.model.js";
@@ -14,6 +15,7 @@ const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$
 export async function createContract(tenantId: string, userId: string, input: Record<string, any>) {
   const tenant = tenantObjectId(tenantId);
   const ownerId = input.ownerId ? tenantObjectId(input.ownerId) : tenantObjectId(userId);
+  if (input.vendorId && !await Vendor.exists({ _id: input.vendorId, tenantId: tenant, status: "ACTIVE" })) throw new HttpError(400, "Linked vendor must be active and belong to this organization.", "INVALID_VENDOR");
   if (!await User.exists({ _id: ownerId, tenantId: tenant, status: "active" })) throw new HttpError(400, "Contract owner must be an active member of this organization.", "INVALID_CONTRACT_OWNER");
   try {
     return await Contract.create({ ...input, tenantId: tenant, ownerId, createdBy: tenantObjectId(userId), updatedBy: tenantObjectId(userId) });
@@ -48,6 +50,7 @@ export async function getContract(tenantId: string, contractId: string) {
 export async function updateContract(tenantId: string, userId: string, contractId: string, changes: Record<string, any>) {
   const tenant = tenantObjectId(tenantId);
   if (changes.ownerId && !await User.exists({ _id: changes.ownerId, tenantId: tenant, status: "active" })) throw new HttpError(400, "Contract owner must be an active member of this organization.", "INVALID_CONTRACT_OWNER");
+  if (changes.vendorId && !await Vendor.exists({ _id: changes.vendorId, tenantId: tenant, status: "ACTIVE" })) throw new HttpError(400, "Linked vendor must be active and belong to this organization.", "INVALID_VENDOR");
   const updated = await Contract.findOneAndUpdate(
     { _id: contractId, tenantId: tenant, status: { $ne: "ARCHIVED" } },
     { $set: { ...changes, ...(changes.status === "ARCHIVED" ? { archivedAt: new Date() } : {}), updatedBy: tenantObjectId(userId) } },

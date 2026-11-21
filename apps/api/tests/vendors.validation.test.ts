@@ -1,0 +1,8 @@
+import { describe, expect, it } from "vitest";
+import { assessVendorSchema, createVendorSchema, listVendorsSchema, updateVendorSchema } from "../src/modules/vendors/vendor.validation.js";
+describe("vendor validation", () => {
+ it("accepts useful vendor profile fields and defaults category", () => { const r = createVendorSchema.safeParse({ legalName: "Acme Services Ltd", contacts: [{ name: "Alex Doe", email: "alex@example.com" }], certifications: [{ name: "ISO 27001" }] }); expect(r.success).toBe(true); if (r.success) expect(r.data.category).toBe("SUPPLIER"); });
+ it("rejects tenant injection, malformed contacts, and invalid websites", () => { expect(createVendorSchema.safeParse({ legalName: "Acme Ltd", tenantId: "64b000000000000000000001" }).success).toBe(false); expect(createVendorSchema.safeParse({ legalName: "Acme Ltd", website: "javascript:alert(1)" }).success).toBe(false); expect(createVendorSchema.safeParse({ legalName: "Acme Ltd", contacts: [{ name: "A", email: "bad" }] }).success).toBe(false); });
+ it("rejects empty updates and constrains assessment scores", () => { expect(updateVendorSchema.safeParse({}).success).toBe(false); expect(assessVendorSchema.safeParse({ score: 101 }).success).toBe(false); expect(assessVendorSchema.safeParse({ score: 75, factors: ["Sanctions screening requires review"] }).success).toBe(true); });
+ it("validates tenant-local list filters and pagination", () => { expect(listVendorsSchema.safeParse({ riskLevel: "CRITICAL", page: "2", limit: "25" }).success).toBe(true); expect(listVendorsSchema.safeParse({ riskLevel: "UNKNOWN" }).success).toBe(false); });
+});

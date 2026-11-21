@@ -20,6 +20,7 @@ interface WorkflowDefinition { _id: string; name: string; stages: Array<{ name: 
 interface ApprovalTask { _id: string; definitionName: string; currentStage: { name: string; approvalMode: string; approverUserIds: string[] }; contract: { title: string; contractNumber: string; counterparty: string } | null; }
 interface ObligationItem { _id: string; title: string; type: string; status: string; priority: string; dueDate: string; contractId: { title: string; contractNumber: string } | string; ownerId: { name: string } | string; }
 interface RenewalItem { _id: string; expiryDate: string; noticeDeadline: string; noticePeriodDays: number; renewalType: string; status: string; contractId: { title: string; contractNumber: string; counterparty: string } | null; }
+interface VendorItem { _id: string; legalName: string; displayName?: string; category: string; status: string; country?: string; industry?: string; riskLevel: string; riskScore: number; contacts: Array<{ name: string; email: string; primary: boolean }>; certifications: Array<{ name: string; status: string }> }
 const auth = useAuthStore();
 const mode = ref<"login" | "register">("login");
 const errorMessage = ref("");
@@ -37,12 +38,12 @@ const renewalSummary = ref({ upcoming: 0, noticeDue: 0, inProgress: 0, expired: 
 const obligationForm = reactive({ contractId: "", title: "", type: "DELIVERABLE", priority: "MEDIUM", dueDate: "", description: "" });
 const renewalForm = reactive({ contractId: "", expiryDate: "", noticePeriodDays: 30, renewalType: "MANUAL", notes: "" });
 const savingObligation = ref(false);
-const savingRenewal = ref(false);
+const savingRenewal = ref(false);\nconst vendors = ref<VendorItem[]>([]);\nconst vendorForm = reactive({ legalName: "", displayName: "", category: "SUPPLIER", industry: "", country: "", website: "", contactName: "", contactEmail: "" });\nconst vendorAssessment = reactive({ vendorId: "", score: 20, factors: "" });\nconst savingVendor = ref(false);
 const workflowForm = reactive({ name: 'Standard contract review', approverUserIds: '' });
 const creatingWorkflow = ref(false);
 const selectedWorkflowId = ref('');
 const form = reactive({ organizationName: "", organizationSlug: "", name: "", email: "", password: "" });
-const contractForm = reactive({ title: "", contractNumber: "", type: "MSA", counterparty: "", currency: "USD", contractValue: "" });
+const contractForm = reactive({ title: "", contractNumber: "", type: "MSA", counterparty: "", vendorId: "", currency: "USD", contractValue: "" });
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
@@ -78,6 +79,34 @@ async function loadObligationsAndRenewals() {
     renewals.value = renewalResult.items;
     renewalSummary.value = renewalResult.summary;
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load obligations and renewals."; }
+}
+
+async function loadVendors() {
+  if (!auth.accessToken) return;
+  try { const result = await api<{ items: VendorItem[] }>("/vendors?page=1&limit=100"); vendors.value = result.items; }
+  catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load vendors."; }
+}
+
+async function createVendor() {
+  errorMessage.value = ""; savingVendor.value = true;
+  try {
+    const contacts = vendorForm.contactName && vendorForm.contactEmail ? [{ name: vendorForm.contactName, email: vendorForm.contactEmail, primary: true }] : [];
+    await api("/vendors", { method: "POST", body: JSON.stringify({ legalName: vendorForm.legalName, displayName: vendorForm.displayName || undefined, category: vendorForm.category, industry: vendorForm.industry || undefined, country: vendorForm.country || undefined, website: vendorForm.website || undefined, contacts, aliases: [], tags: [], certifications: [] }) });
+    Object.assign(vendorForm, { legalName: "", displayName: "", category: "SUPPLIER", industry: "", country: "", website: "", contactName: "", contactEmail: "" });
+    successMessage.value = "Counterparty profile created.";
+    await loadVendors();
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not create vendor."; }
+  finally { savingVendor.value = false; }
+}
+
+async function assessVendor() {
+  errorMessage.value = "";
+  try {
+    await api(`/vendors/${vendorAssessment.vendorId}/assessments`, { method: "POST", body: JSON.stringify({ score: vendorAssessment.score, factors: vendorAssessment.factors.split(",").map(v => v.trim()).filter(Boolean) }) });
+    successMessage.value = "Vendor risk assessment recorded.";
+    vendorAssessment.factors = "";
+    await loadVendors();
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not save vendor assessment."; }
 }
 
 async function createObligation() {
@@ -136,7 +165,7 @@ onMounted(async () => {
   await auth.restore();
   if (auth.user) {
     if (!workflowForm.approverUserIds) workflowForm.approverUserIds = auth.user.id;
-    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals()]);
+    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors()]);
   }
 });
 
@@ -145,7 +174,7 @@ async function submitAuth() {
   try {
     if (mode.value === "register") await auth.register({ ...form });
     else await auth.login({ organizationSlug: form.organizationSlug, email: form.email, password: form.password });
-    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals()]);
+    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors()]);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Something went wrong. Please try again.";
   }
@@ -161,10 +190,10 @@ async function createContract() {
       body: JSON.stringify({
         ...contractForm,
         contractValue: contractForm.contractValue ? Number(contractForm.contractValue) : undefined,
-        tags: []
+        vendorId: contractForm.vendorId || undefined,\n        tags: []
       })
     });
-    Object.assign(contractForm, { title: "", contractNumber: "", type: "MSA", counterparty: "", currency: "USD", contractValue: "" });
+    Object.assign(contractForm, { title: "", contractNumber: "", type: "MSA", counterparty: "", vendorId: "", currency: "USD", contractValue: "" });
     successMessage.value = "Contract record created.";
     await loadContracts();
   } catch (error) {
@@ -360,6 +389,43 @@ async function signOut() {
           <div class="definition-list">
             <article v-for="item in renewals" :key="item._id" class="definition-row"><strong>{{ item.contractId?.contractNumber }} · {{ item.contractId?.title }}</strong><small>{{ item.status.replace('_', ' ') }} · Notice by {{ new Date(item.noticeDeadline).toLocaleDateString() }} · Expires {{ new Date(item.expiryDate).toLocaleDateString() }}</small><div v-if="!['RENEWED', 'TERMINATED', 'EXPIRED'].includes(item.status)" class="task-actions"><button class="submit-action" @click="updateRenewalStatus(item, 'RENEWAL_IN_PROGRESS')">Start</button><button class="approve-button" @click="updateRenewalStatus(item, 'RENEWED')">Renewed</button><button class="reject-button" @click="updateRenewalStatus(item, 'TERMINATED')">Terminate</button></div></article>
             <p v-if="!renewals.length" class="panel-note">Set an expiry date and notice period to begin tracking renewals.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <section class="vendor-grid">
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">COUNTERPARTY DIRECTORY</span><h2>Vendor intelligence <span class="count-chip">{{ vendors.length }}</span></h2></div><button class="refresh-button" @click="loadVendors">↻ Refresh</button></div>
+          <form @submit.prevent="createVendor">
+            <label>Legal entity name<input v-model="vendorForm.legalName" required minlength="2" maxlength="180" placeholder="Acme Technologies Pvt Ltd"/></label>
+            <label>Display name<input v-model="vendorForm.displayName" maxlength="120" placeholder="Acme Technologies"/></label>
+            <div class="form-row"><label>Category<select v-model="vendorForm.category"><option>SUPPLIER</option><option>SERVICE_PROVIDER</option><option>CUSTOMER</option><option>PARTNER</option><option>CONSULTANT</option><option>OTHER</option></select></label><label>Industry<input v-model="vendorForm.industry" maxlength="100" placeholder="Technology"/></label></div>
+            <div class="form-row"><label>Country<input v-model="vendorForm.country" maxlength="100" placeholder="India"/></label><label>Website<input v-model="vendorForm.website" type="url" placeholder="https://example.com"/></label></div>
+            <div class="form-row"><label>Primary contact<input v-model="vendorForm.contactName" placeholder="Contact name"/></label><label>Contact email<input v-model="vendorForm.contactEmail" type="email" placeholder="contact@example.com"/></label></div>
+            <button class="primary-button" type="submit" :disabled="savingVendor">{{ savingVendor ? "Saving…" : "Create counterparty profile" }}</button>
+          </form>
+          <div class="definition-list">
+            <article v-for="vendor in vendors" :key="vendor._id" class="definition-row">
+              <div class="vendor-title"><strong>{{ vendor.displayName || vendor.legalName }}</strong><span class="risk-pill" :class="vendor.riskLevel.toLowerCase()">{{ vendor.riskLevel }} · {{ vendor.riskScore }}/100</span></div>
+              <small>{{ vendor.category.replace('_', ' ') }} · {{ vendor.industry || 'Industry not set' }} · {{ vendor.country || 'Country not set' }} · {{ vendor.status }}</small>
+              <small>{{ vendor.contacts.length }} contacts · {{ vendor.certifications.length }} compliance records</small>
+            </article>
+            <p v-if="!vendors.length" class="panel-note">No counterparties registered yet.</p>
+          </div>
+        </div>
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">THIRD-PARTY RISK</span><h2>Risk assessment</h2></div><span class="panel-number">04</span></div>
+          <form @submit.prevent="assessVendor">
+            <label>Counterparty<select v-model="vendorAssessment.vendorId" required><option value="" disabled>Select vendor</option><option v-for="vendor in vendors" :key="vendor._id" :value="vendor._id">{{ vendor.legalName }}</option></select></label>
+            <label>Risk score (0–100)<input v-model.number="vendorAssessment.score" type="number" min="0" max="100" required/></label>
+            <label>Risk factors<input v-model="vendorAssessment.factors" placeholder="Data access, sanctions review, financial exposure"/></label>
+            <p class="field-hint">Risk bands are calculated from the reviewed score: 0–29 low, 30–59 medium, 60–79 high, 80–100 critical. Assessments are human-entered, not automated screening.</p>
+            <button class="primary-button" type="submit" :disabled="!vendors.length || !vendorAssessment.vendorId">Record risk assessment</button>
+          </form>
+          <div class="definition-list">
+            <article class="definition-row"><strong>Linked contract coverage</strong><small>Choose a vendor while creating a contract to connect it to the counterparty profile and its portfolio overview API.</small></article>
+            <article class="definition-row"><strong>Compliance expiry visibility</strong><small>Certification records retain expiry dates and expose expired status in the vendor API.</small></article>
           </div>
         </div>
       </section>

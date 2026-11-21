@@ -12,6 +12,7 @@ export interface ContractDocument {
   type: ContractType;
   status: ContractStatus;
   counterparty: string;
+  vendorId?: Types.ObjectId;
   description?: string;
   ownerId: Types.ObjectId;
   createdBy: Types.ObjectId;
@@ -33,6 +34,7 @@ const schema = new Schema<ContractDocument>({
   type: { type: String, enum: CONTRACT_TYPES, required: true },
   status: { type: String, enum: CONTRACT_STATUSES, default: "DRAFT", required: true },
   counterparty: { type: String, required: true, trim: true, maxlength: 160 },
+  vendorId: { type: Schema.Types.ObjectId, ref: "Vendor" },
   description: { type: String, trim: true, maxlength: 4000 },
   ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
