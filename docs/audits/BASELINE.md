@@ -364,3 +364,20 @@ This section records findings confirmed during the subsequent PR and source revi
 ### Not performed
 
 No local checkout-based manual test run, live S3/ClamAV test, production cloud configuration review, penetration test, SBOM/provenance publication, disaster-recovery exercise, or production deployment has been performed. The repository has received substantial source and CI hardening, but this is not a production-readiness certification.
+
+
+## Verification update — immediate access-token account revocation (2026-11-21)
+
+### F-07 remediation
+
+- PR #48 merged as `31a94bf03ac11d600293d555186b3f69863aaee8`.
+- Authenticated requests now verify the JWT and then query the current active user within the claimed tenant and verify the tenant remains active.
+- The effective request role is taken from the current database user record, so role changes take effect immediately instead of waiting for access-token expiry.
+- Disabled users and suspended tenants are rejected with `ACCOUNT_INACTIVE` even when presenting a previously issued, unexpired access token.
+- Unit tests cover stale token roles and inactive account responses. MongoDB integration tests cover user deactivation, tenant suspension, and current-role lookup.
+- PR #48 verification run [44936014713](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44936014713) completed successfully, including full dependency audit, typecheck, build and database integration tests.
+
+### Operational consideration
+
+- Each authenticated request now performs a user lookup and a tenant existence check. This prioritizes immediate account/role revocation over avoiding database reads. Monitor API latency and MongoDB query load; do not add a cache unless its invalidation semantics preserve the required revocation behavior.
+- F-08 limitation remains: refresh-token family replay revokes refresh sessions but does not revoke already-issued access JWTs on its own. Those JWTs remain bounded by access-token expiry unless the user or tenant is also disabled/suspended or a future token-family/session-version check is introduced.
