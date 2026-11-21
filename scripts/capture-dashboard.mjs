@@ -78,9 +78,16 @@ async function main() {
   await page.goto(baseUrl, { waitUntil:"networkidle" });
   await page.waitForSelector(".workspace-heading", { timeout:30000 });
   await page.locator(`.intelligence-panel select option[value="${id}"]`).waitFor({ state:"attached", timeout:30000 });
-  await page.locator(".intelligence-panel select").first().selectOption(id);
+  const contractSelect = page.locator(".intelligence-panel select").first();
+  await contractSelect.selectOption(id);
+  await contractSelect.dispatchEvent("input");
+  await contractSelect.dispatchEvent("change");
   const source = "This Master Services Agreement is entered into by the parties. The parties agree to confidentiality obligations and shall protect personal data. This agreement is governed by the laws of England. The supplier shall maintain insurance and indemnify the customer for all claims. This agreement will automatically renew for successive one-year terms. The supplier's liability under this agreement shall be unlimited. The parties agree to payment terms and termination rights.";
-  await page.locator(".intelligence-panel form textarea").first().fill(source);
+  const sourceTextarea = page.locator(".intelligence-panel form textarea").first();
+  await sourceTextarea.fill(source);
+  await sourceTextarea.dispatchEvent("input");
+  await sourceTextarea.dispatchEvent("change");
+  await page.waitForTimeout(250);
   const selectedContract = await page.locator(".intelligence-panel select").first().inputValue();
   const sourceLength = await page.locator(".intelligence-panel form textarea").first().inputValue().then(value => value.trim().length);
   const submitDisabled = await page.locator(".intelligence-panel form button[type=submit]").first().isDisabled();
