@@ -15,7 +15,7 @@
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
-    "mongoose": "^8.12.1",
+    "mongoose": "^9.12.2",
     "pino-http": "^10.4.0",
     "zod": "^4.6.7",
     "@aws-sdk/client-s3": "^3.750.0",
