@@ -4,7 +4,7 @@
 
 ContractSphere is a multi-tenant contract lifecycle management (CLM) platform for creating, reviewing, approving, executing, monitoring, and analyzing business agreements.
 
-> Status: authentication and contract repository milestones implemented. Workflow automation, intelligence, and production hardening are next.
+> Status: authentication, contract repository, and multi-stage approval workflow milestones implemented. Contract intelligence and production hardening are next.
 
 ## Product vision
 
@@ -101,6 +101,20 @@ Document bytes are stored in a **private S3-compatible bucket**; MongoDB stores 
 
 The API issues five-minute, server-generated PUT URLs for PDF and DOCX files up to 25 MiB. After upload, the client calls the completion endpoint; the API checks object size and declared content type before creating a version record. Download URLs expire after 60 seconds. Configure bucket CORS to allow the web origin to PUT with the signed `Content-Type` header. For production, add malware scanning, file-signature inspection, retention policies, and a managed secrets provider before accepting sensitive agreements.
 
+## Approval workflow API
+
+All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/workflows/definitions` | List organization workflow definitions |
+| POST | `/workflows/definitions` | Create a multi-stage workflow (OWNER/ADMIN) |
+| POST | `/workflows/contracts/:contractId/submit` | Submit a draft contract for approval |
+| GET | `/workflows/tasks/mine` | List tasks assigned to the authenticated approver |
+| POST | `/workflows/instances/:instanceId/decision` | Approve or reject the current stage |
+
+Each definition contains 1–10 sequential stages. Each stage supports `ALL` (every assigned approver must approve) or `ANY` (one approval completes the stage). Approvers must be active users in the same tenant. Submission snapshots the definition so later edits cannot rewrite an in-flight approval. A contract may have only one active workflow at a time. Rejection returns the contract to `DRAFT`; final approval moves it to `APPROVED`. Decision records include the actor, decision, comment, and timestamp. Direct API updates cannot bypass the workflow to set `IN_REVIEW` or `APPROVED`.
+
 ## Engineering principles
 
 1. Enforce tenant scope on the server for every tenant-owned resource.
@@ -118,7 +132,8 @@ The API issues five-minute, server-generated PUT URLs for PDF and DOCX files up 
 - [x] Initial users, roles, and role-based route guard
 - [x] Contract repository API, metadata, tenant-scoped search, and document versioning
 - [x] Private S3-compatible upload/download URL workflow
-- [ ] Templates, clauses, and approval workflow engine
+- [x] Configurable multi-stage approval workflow engine with ANY/ALL approvers and decision history
+- [ ] Templates and clause library
 - [ ] Obligations, renewals, vendors, and notifications
 - [ ] AI-assisted contract intelligence with evidence references
 - [ ] Audit, analytics, exports, integrations, and production hardening

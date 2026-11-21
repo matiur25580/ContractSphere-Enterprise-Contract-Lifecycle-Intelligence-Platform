@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { contractRouter } from "./modules/contracts/contract.routes.js";
+import { workflowRouter } from "./modules/workflows/workflow.routes.js";
 import { env } from "./config/env.js";
 import { errorHandler } from "./common/error-handler.js";
 import { healthRouter } from "./modules/health/health.routes.js";
@@ -23,5 +24,6 @@ app.get("/", (_req, res) => res.json({ success: true, data: { name: "ContractSph
 app.use(`${env.API_PREFIX}/health`, healthRouter);
 app.use(`${env.API_PREFIX}/auth`, authRouter);
 app.use(`${env.API_PREFIX}/contracts`, contractRouter);
+app.use(`${env.API_PREFIX}/workflows`, workflowRouter);
 app.use((_req, res) => res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Route not found." } }));
 app.use(errorHandler);
