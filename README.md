@@ -1,249 +1,524 @@
 # ContractSphere
+## Enterprise Contract Lifecycle Intelligence Platform
 
-**Enterprise Contract Lifecycle Intelligence Platform**
+**ContractSphere** is a multi-tenant contract lifecycle management workspace for legal, procurement, finance, vendor-management and business operations teams. It connects agreement records, private document versions, governed language, approval decisions, obligations, renewals, counterparty oversight and evidence-led contract review.
 
-ContractSphere is a multi-tenant contract lifecycle management (CLM) platform for creating, reviewing, approving, executing, monitoring, and analyzing business agreements.
+> **Project status:** Active engineering project. Core repository, tenant-aware authentication, workflow approvals, obligations and renewals, vendor profiles, governed templates and clauses, audit events, notifications, document extraction, optional AI-assisted review and deterministic version comparison are implemented. Production deployment still requires the infrastructure configuration and hardening described below.
 
-> Status: authentication, contract repository, multi-stage approval workflows, obligations/renewals, vendor intelligence, governed templates, and versioned clause library are implemented. AI contract intelligence and production hardening remain in progress.
+---
 
-## Product vision
+## 1. Product vision
 
-Give legal, procurement, finance, and business teams one secure system of record for agreements, approvals, obligations, renewals, and contract intelligence.
+Every agreement should have an accountable owner, a traceable document history, a governed approval path, visible commitments and reviewable evidence.
 
-## Planned capabilities
+### Intended users
 
-- Secure organization workspaces with tenant isolation and role-based access control.
-- Contract repository, metadata, document versions, and controlled document access.
-- Reusable templates and clause library with version-pinned clauses, independent approval, dynamic fields, and draft generation.
-- Configurable multi-stage approval workflows, delegation, and SLA escalation.
-- Tenant-scoped obligation tracking, renewal calendars, notice deadlines, and vendor/counterparty intelligence.
-- AI-assisted summaries, clause extraction, risk signals, and comparisons with source-grounded evidence and human review.
-- Append-oriented audit events, operational analytics, notifications, and exports.
-
-## Architecture
-
-The initial implementation is a **TypeScript modular monolith** in an npm-workspaces monorepo.
-
-```text
-apps/
-  api/       Express + TypeScript REST API
-  web/       Vue 3 + TypeScript application
-packages/
-  shared/    Shared contracts and types (planned)
-infra/       Local development and deployment assets
-```
-
-### Technology
-
-| Layer | Technology |
+| Team | Value |
 |---|---|
-| Frontend | Vue 3, Composition API, TypeScript, Vite, Pinia, Vue Router |
-| Backend | Node.js, Express, TypeScript, Zod |
-| Data | MongoDB, Mongoose |
-| Quality | Vitest, Supertest (planned), TypeScript |
-| Operations | Docker Compose, GitHub Actions (planned) |
+| Legal operations | Governed templates, reusable clauses, review findings and approval history |
+| Procurement | Counterparty profiles, supplier agreements, obligations and renewal planning |
+| Finance | Contract values, payment commitments, renewal exposure and approval checkpoints |
+| Security and privacy | Data-processing language visibility, certification records and review evidence |
+| Business owners | Clear ownership, approval tasks and searchable agreement records |
+| Administrators | Organization-scoped access, workflow configuration and audit visibility |
 
-## Getting started
+### Differentiators
+
+1. **Connected lifecycle context:** repository, approvals, obligations, renewals, vendors, templates and intelligence share contract context.
+2. **Governed language:** approved templates, independently approved revisions, reusable clause versions and structured fields.
+3. **Accountable decisions:** sequential approval stages, ALL/ANY approver rules, decision history and audit events.
+4. **Evidence-first intelligence:** findings are paired with source excerpts and offsets where available; unsupported AI quotations are discarded.
+5. **Version-aware review:** clause, risk and sentence-level comparisons highlight additions, removals and changed risk signals.
+6. **Tenant-aware architecture:** tenant scope and resource authorization are enforced by the API, not trusted to browser-supplied organization identifiers.
+7. **Human-controlled legal workflow:** analysis supports review; it does not approve, execute or sign agreements.
+
+---
+
+## 2. Feature set
+
+### Contract repository and document control
+- Create and search contract records with title, number, type, counterparty, status, currency, value, tags and ownership metadata.
+- Filter and paginate the organization's agreement inventory.
+- Link contracts to active vendor profiles.
+- Upload versioned PDF and DOCX documents using short-lived, server-generated S3-compatible upload URLs.
+- Verify uploaded object metadata before registering a version.
+- Generate short-lived download URLs for authorized users.
+- Store document bytes in private object storage and version metadata in MongoDB.
+
+### Authentication, organizations and authorization
+- Organization onboarding creates the first OWNER account.
+- Login uses organization slug, email and password.
+- Passwords are hashed with bcrypt.
+- Short-lived access tokens and opaque rotating refresh sessions are used.
+- Refresh-token hashes are stored in MongoDB; refresh tokens are delivered through an HttpOnly cookie.
+- Refresh/logout enforce the configured browser origin; logout revokes the current refresh session.
+- Roles currently include OWNER, ADMIN and MEMBER.
+- Intelligence and comparison access is restricted to the contract owner/creator and organization owners/administrators.
+- Tenant-owned database queries are scoped using verified authentication claims.
+
+### Approval workflow engine
+- Configure one to ten sequential stages.
+- Each stage supports ALL or ANY approver decisions.
+- Approvers must be active users in the same tenant.
+- Submission snapshots the workflow definition so later edits do not rewrite in-flight approvals.
+- Assigned reviewers receive deduplicated in-app notifications.
+- Reviewers can approve or reject with decision history.
+- Rejection returns the contract to DRAFT; final approval transitions it to APPROVED.
+- Conditional state transitions help prevent duplicate or conflicting decisions.
+
+### Obligations and renewal management
+- Track PAYMENT, DELIVERABLE, SLA, COMPLIANCE, NOTICE and OTHER obligations.
+- Assign active organization members, due dates, priorities and statuses.
+- Track completion, cancellation, reopening and overdue state.
+- Maintain renewal expiry dates, notice periods, calculated notice deadlines, renewal type, owner and lifecycle status.
+- Filter obligation records and review renewal exposure.
+
+### Vendor and counterparty intelligence
+- Maintain legal/display names, aliases, category, industry, country, website, tax reference, contacts, tags and certifications.
+- Link vendor profiles to contracts and review linked portfolio information.
+- Surface certification expiry state.
+- Record human-reviewed risk scores, factors, notes, reviewer and assessment history.
+- Risk bands: LOW (0–29), MEDIUM (30–59), HIGH (60–79), CRITICAL (80–100).
+
+> Vendor risk scores and certifications are manually maintained. Automated sanctions, adverse-media, credit, cyber-security and regulatory screening are not implemented.
+
+### Governed templates and clause library
+- Create draft templates for supported agreement types.
+- Configure TEXT, DATE, NUMBER, EMAIL and CHOICE fields.
+- Render declared placeholders such as {{effectiveDate}}.
+- Reuse clause wording and pin a specific clause version into a template section.
+- Submit templates for independent approval; a creator cannot approve their own template.
+- Create new revisions rather than silently changing approved template wording.
+- Generate a DRAFT contract from an approved template and validated field values.
+
+### Contract intelligence and document processing
+- Deterministic rules identify selected clause categories, missing-term signals and selected drafting risks.
+- Findings include severity, confidence, explanation and source evidence when detected.
+- PDF and DOCX text extraction is supported for private stored versions.
+- An optional OpenAI-compatible provider can produce structured analysis when configured by the server.
+- AI output is schema-validated; a finding is kept only when its exact quoted evidence appears in the source text.
+- Provider credentials never enter browser code.
+- Full source contract text is not persisted in intelligence reports; reports store fingerprints, labels, lengths and limited evidence excerpts.
+
+### Contract version comparison
+- Compare two pasted contract texts or two stored PDF/DOCX versions belonging to the same contract.
+- Identify detected clause categories added or removed.
+- Highlight new, resolved or severity-changed deterministic risk signals.
+- Surface sentence-level additions and removals.
+- Provide a sentence-set overlap indicator and a source fingerprint for each side.
+- Save comparison metadata and bounded excerpts for later review.
+- Record comparison activity in the audit trail.
+
+**Interpretation note:** the current comparison engine uses deterministic sentence and clause matching. Its similarity percentage is a sentence-set overlap indicator, not an embedding-based semantic similarity score or legal redline. It can miss reordered, paraphrased or context-dependent changes.
+
+### Audit events and notifications
+- Record important contract, document, workflow, obligation, renewal, vendor and intelligence actions.
+- Provide tenant-scoped audit history for OWNER and ADMIN.
+- Expose recipient-scoped in-app notifications and read state.
+- The application exposes no audit update/delete route; this is not a claim of database-level immutability.
+
+---
+
+## 3. Technology stack
+
+| Area | Technology |
+|---|---|
+| Web application | Vue 3, Composition API, TypeScript |
+| Build and development | Vite, npm workspaces |
+| Client state | Pinia |
+| API | Node.js, Express 5, TypeScript |
+| Validation | Zod |
+| Persistence | MongoDB, Mongoose |
+| Authentication | bcrypt, JWT access tokens, rotating opaque refresh sessions |
+| Document storage | AWS SDK v3, private S3-compatible object storage |
+| Document parsing | pdf-parse, Mammoth (DOCX) |
+| AI integration | Server-side OpenAI-compatible Chat Completions adapter |
+| Testing | Vitest, TypeScript type checking |
+| Browser showcase | Playwright Chromium |
+| CI | GitHub Actions |
+
+### Architecture
+
+The project uses a **TypeScript modular monolith**. Domain modules are separated while remaining deployable as one API service.
+
+    ContractSphere/
+    ├── apps/
+    │   ├── api/
+    │   │   ├── src/
+    │   │   │   ├── common/          # HTTP errors and async handling
+    │   │   │   ├── config/          # Environment and database setup
+    │   │   │   └── modules/
+    │   │   │       ├── auth/
+    │   │   │       ├── contracts/
+    │   │   │       ├── intelligence/
+    │   │   │       ├── workflows/
+    │   │   │       ├── obligations/
+    │   │   │       ├── vendors/
+    │   │   │       ├── templates/
+    │   │   │       ├── audit/
+    │   │   │       └── notifications/
+    │   │   └── tests/
+    │   └── web/
+    │       └── src/
+    │           ├── stores/
+    │           ├── App.vue
+    │           └── style.css
+    ├── docs/screenshots/
+    ├── scripts/capture-dashboard.mjs
+    └── .github/workflows/
+
+### Request and data flow
+1. The browser authenticates and receives a short-lived access token.
+2. API middleware verifies identity and role claims.
+3. Domain services scope MongoDB reads and writes to the authenticated tenant.
+4. Contract files are uploaded directly to private object storage using a short-lived signed URL.
+5. The API verifies object metadata before registering a version.
+6. Intelligence and comparison services extract text, calculate source fingerprints and produce bounded, evidence-linked outputs.
+7. Security-sensitive actions are written to the audit collection.
+
+---
+
+## 4. Getting started
 
 ### Prerequisites
-
 - Node.js 20.19+ or 22.12+
 - npm 10+
 - MongoDB 7+ (local or Atlas)
+- An S3-compatible private bucket for document upload, download and stored-document analysis
+- Chromium only if generating the dashboard screenshot gallery
 
 ### Install and run
 
-```bash
-npm install
-cp apps/api/.env.example apps/api/.env
-npm run dev
-```
+    git clone https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform.git
+    cd ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform
+    npm install
+    cp apps/api/.env.example apps/api/.env
 
-The API health endpoint is `http://localhost:4000/api/v1/health`. The web app runs at `http://localhost:5173`. Authentication and tenant onboarding require MongoDB to be reachable.
+Configure the environment, then start both applications:
 
-## Authentication API
+    npm run dev
 
-All routes are prefixed with `/api/v1`.
+- Web application: http://localhost:5173
+- API: http://localhost:4000
+- Health endpoint: http://localhost:4000/api/v1/health
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/auth/register` | Create an organization and its first OWNER account |
-| POST | `/auth/login` | Sign in using organization slug, email, and password |
-| POST | `/auth/refresh` | Rotate the HttpOnly refresh-token cookie |
-| POST | `/auth/logout` | Revoke the current refresh session |
-| GET | `/auth/me` | Return the authenticated user and organization |
+MongoDB must be reachable. Document workflows additionally require valid private object-storage configuration.
 
-Registration requires `organizationName`, `organizationSlug`, `name`, `email`, and a password of at least 12 characters containing lowercase, uppercase, and numeric characters. Login requires `organizationSlug`, `email`, and `password`.
+### Environment variables
 
-The API returns a short-lived JWT access token in the response body. The opaque refresh token is stored only as a SHA-256 hash in MongoDB and delivered through an HttpOnly cookie. Refresh rotates the token; logout revokes the current session. Refresh and logout requests must include the configured frontend `Origin`.
+The complete template is maintained in apps/api/.env.example.
 
-Roles currently defined are `OWNER`, `ADMIN`, and `MEMBER`. The reusable `requireRoles(...)` middleware is available for protected administrative routes. Tenant IDs are carried in verified access-token claims; future tenant-owned resource modules must scope every database query by that tenant ID.
+| Variable | Required | Purpose |
+|---|---:|---|
+| NODE_ENV | No | development, test or production |
+| PORT | No | API port (default 4000) |
+| API_PREFIX | No | API prefix (default /api/v1) |
+| WEB_ORIGIN | Deployment | Exact trusted browser origin |
+| MONGODB_URI | Yes | MongoDB connection string |
+| JWT_ACCESS_SECRET | Production | Random secret of at least 32 characters |
+| ACCESS_TOKEN_TTL | No | Access-token lifetime |
+| REFRESH_TOKEN_TTL_DAYS | No | Refresh-session lifetime |
+| S3_BUCKET | Documents | Private object-storage bucket |
+| S3_REGION | Documents | Storage region |
+| S3_ACCESS_KEY_ID | Documents | Server-side storage credential |
+| S3_SECRET_ACCESS_KEY | Documents | Server-side storage credential |
+| S3_ENDPOINT | Optional | S3-compatible endpoint, e.g. MinIO |
+| AI_API_KEY | Optional | Server-side AI provider credential |
+| AI_BASE_URL | Optional | OpenAI-compatible API base URL |
+| AI_MODEL | Optional | Provider model identifier |
 
-## Contract repository API
+The four S3 values must be configured together. Keep the bucket private, restrict credentials to required bucket operations, and configure CORS for the web origin and signed Content-Type upload header.
 
-All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+### Optional AI configuration
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/contracts` | Create a contract record, optionally linked to an active vendor using `vendorId` |
-| GET | `/contracts` | Search/filter contracts with pagination |
-| GET | `/contracts/:contractId` | Retrieve metadata and version history |
-| PATCH | `/contracts/:contractId` | Update contract metadata/status |
-| POST | `/contracts/:contractId/uploads` | Request a short-lived private object-storage upload URL |
-| POST | `/contracts/uploads/:uploadId/complete` | Verify the stored object and register a new version |
-| GET | `/contracts/:contractId/versions/:fileId/download` | Generate a short-lived download URL |
+    AI_API_KEY=your-server-side-provider-key
+    AI_BASE_URL=https://api.openai.com/v1
+    AI_MODEL=gpt-4.1-mini
 
-Contract search supports `q`, `status`, `type`, `counterparty`, `page`, `limit`, `sort`, and `order`. Search is always constrained by the authenticated tenant. Contract numbers are unique within an organization.
+Without AI_API_KEY, use the deterministic rules-based engine. When AI_COMPATIBLE is selected, contract text is sent to the configured external provider. Obtain organizational approval and review provider retention, data-processing, residency and confidentiality terms before enabling it. Provider-side policies remain relevant even when request storage is disabled.
 
-### Document storage setup
+---
 
-Document bytes are stored in a **private S3-compatible bucket**; MongoDB stores metadata, version records, and upload intents. Configure all four required storage settings in `apps/api/.env`: `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`. Optionally set `S3_ENDPOINT` for MinIO or another S3-compatible provider. The bucket must remain private and should have lifecycle, encryption, and access logging policies configured.
+## 5. API reference
 
-The API issues five-minute, server-generated PUT URLs for PDF and DOCX files up to 25 MiB. After upload, the client calls the completion endpoint; the API checks object size and declared content type before creating a version record. Download URLs expire after 60 seconds. Configure bucket CORS to allow the web origin to PUT with the signed `Content-Type` header. For production, add malware scanning, file-signature inspection, retention policies, and a managed secrets provider before accepting sensitive agreements.
+All endpoints use the /api/v1 prefix. Protected endpoints require Authorization: Bearer accessToken unless noted. Request bodies are validated at the API boundary.
 
-## Approval workflow API
-
-All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/workflows/definitions` | List organization workflow definitions |
-| POST | `/workflows/definitions` | Create a multi-stage workflow (OWNER/ADMIN) |
-| POST | `/workflows/contracts/:contractId/submit` | Submit a draft contract for approval |
-| GET | `/workflows/tasks/mine` | List tasks assigned to the authenticated approver |
-| POST | `/workflows/instances/:instanceId/decision` | Approve or reject the current stage |
-
-Each definition contains 1–10 sequential stages. Each stage supports `ALL` (every assigned approver must approve) or `ANY` (one approval completes the stage). Approvers must be active users in the same tenant. Submission snapshots the definition so later edits cannot rewrite an in-flight approval. A contract may have only one active workflow at a time. Rejection returns the contract to `DRAFT`; final approval moves it to `APPROVED`. Decision records include the actor, decision, comment, and timestamp. Direct API updates cannot bypass the workflow to set `IN_REVIEW` or `APPROVED`.
-
-## Obligations and renewal API
-
-All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+### Authentication
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/obligations` | Create an obligation for a contract |
-| GET | `/obligations` | Filter and paginate tenant obligations |
-| PATCH | `/obligations/:obligationId` | Update an obligation or mark it complete/reopen it |
-| GET | `/obligations/renewals` | List renewal schedules with computed lifecycle status and summary |
-| PUT | `/obligations/renewals/:contractId` | Create or update a contract renewal schedule |
-| PATCH | `/obligations/renewals/:renewalId/status` | Mark a renewal in progress, renewed, or terminated |
+| POST | /auth/register | Create organization and first OWNER |
+| POST | /auth/login | Sign in with organization slug, email and password |
+| POST | /auth/refresh | Rotate the HttpOnly refresh session |
+| POST | /auth/logout | Revoke current refresh session |
+| GET | /auth/me | Read authenticated identity |
 
-Obligations support PAYMENT, DELIVERABLE, SLA, COMPLIANCE, NOTICE, and OTHER types; LOW through CRITICAL priorities; due dates; active organization-member owners; and PENDING, IN_PROGRESS, COMPLETED, OVERDUE, and CANCELLED states. Lists support contract, owner, status, type, priority, due-date range, and pagination filters. Overdue status is derived from due date when read; completed and cancelled records remain terminal. Only the contract owner or an OWNER/ADMIN can create/manage its obligations and renewal schedule; only the obligation/renewal owner or an OWNER/ADMIN can update it.
+Registration requires organization name/slug, user name/email and a password of at least 12 characters containing lowercase, uppercase and numeric characters.
 
-Renewal schedules record expiry date, notice period, derived notice deadline, renewal type, owner, and lifecycle status. The notice deadline is calculated server-side as expiry date minus notice-period days. Upcoming, notice-due, in-progress, renewed, terminated, and expired states are exposed. These endpoints provide tracking only: automated email/in-app reminders and durable scheduled jobs are not implemented yet.
-
-## Vendor and counterparty API
-
-All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+### Contracts and documents
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/vendors` | Create a vendor/counterparty profile (OWNER/ADMIN) |
-| GET | `/vendors` | Search and filter tenant vendors |
-| GET | `/vendors/:vendorId/overview` | View linked contracts, contract value, obligations, renewals, and compliance status |
-| PATCH | `/vendors/:vendorId` | Update profile, contacts, certifications, aliases, tags, and status (OWNER/ADMIN) |
-| POST | `/vendors/:vendorId/assessments` | Record a human-reviewed risk assessment (OWNER/ADMIN) |
+| POST | /contracts | Create a contract |
+| GET | /contracts | Search and paginate contracts |
+| GET | /contracts/:contractId | Read contract and document versions |
+| PATCH | /contracts/:contractId | Update contract metadata |
+| POST | /contracts/:contractId/uploads | Create short-lived upload intent and signed URL |
+| POST | /contracts/uploads/:uploadId/complete | Verify and register uploaded version |
+| GET | /contracts/:contractId/versions/:fileId/download | Create short-lived download URL |
 
-Vendor profiles include legal/display names, normalized aliases, category, industry, country, website, tax reference, contacts, certifications, and lifecycle status. Risk scores are human-entered and mapped to LOW (0–29), MEDIUM (30–59), HIGH (60–79), or CRITICAL (80–100); assessment history records reviewer, score, factors, notes, and timestamp. Certification expiry is surfaced as EXPIRED when its date has passed. These features do not perform sanctions, credit, cyber-security, or regulatory screening automatically.
+Contract search supports query, status, type, counterparty, pagination and sorting. Upload requests accept PDF/DOCX and are limited to 25 MiB by the upload workflow. The intelligence extractor applies a stricter 10 MiB limit.
 
-Contracts can optionally link to an active vendor profile through `vendorId`. The vendor overview also matches legacy contract counterparty names and aliases for gradual adoption. All vendor and linked portfolio queries are scoped to the authenticated tenant. Vendor creation, profile changes, and risk assessments are restricted to OWNER/ADMIN.
-
-## Contract templates and clause library API
-
-All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+### Approval workflows
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/templates` | List tenant templates |
-| GET | `/templates/:templateId` | Read a tenant template |
-| POST | `/templates` | Create a draft template (OWNER/ADMIN) |
-| PATCH | `/templates/:templateId` | Edit a draft template (OWNER/ADMIN) |
-| POST | `/templates/:templateId/submit` | Submit a draft for independent approval |
-| POST | `/templates/:templateId/approve` | Approve a pending template; creator cannot self-approve |
-| POST | `/templates/:templateId/revisions` | Create a new draft revision from an approved template |
-| GET | `/templates/clauses` | List active tenant clauses |
-| POST | `/templates/clauses` | Create a version 1 clause (OWNER/ADMIN) |
-| PATCH | `/templates/clauses/:clauseId` | Update clause metadata or create a new wording version (OWNER/ADMIN) |
-| POST | `/templates/:templateId/generate` | Generate a DRAFT contract from an approved template |
+| GET | /workflows/definitions | List tenant workflow definitions |
+| POST | /workflows/definitions | Create workflow definition (OWNER/ADMIN) |
+| POST | /workflows/contracts/:contractId/submit | Submit contract for approval |
+| GET | /workflows/tasks/mine | Read assigned approval tasks |
+| POST | /workflows/instances/:instanceId/decision | Record approve/reject decision |
 
-Template fields support TEXT, DATE, NUMBER, EMAIL, and CHOICE values. Content uses `{{fieldKey}}` placeholders; undeclared fields and invalid values are rejected. Template sections pin a clause version so later edits do not silently change approved wording. Templates move through DRAFT, PENDING_APPROVAL, and APPROVED; approval requires a different OWNER/ADMIN from the creator. Changes to approved templates require a new revision and approval.
-
-Generation creates a tenant-scoped DRAFT contract and stores rendered text with the source template ID/version. It does not create a PDF/DOCX file, approve, execute, or sign the contract. Generated wording requires human legal review.
-
-## Engineering principles
-
-1. Enforce tenant scope on the server for every tenant-owned resource.
-2. Deny access by default and authorize each resource operation, not only each route.
-3. Validate untrusted input at API boundaries.
-4. Keep document bytes in private object storage; persist metadata and access policies in MongoDB.
-5. Treat AI output as assistance, not legal advice or an autonomous approval/signature.
-6. Record security-sensitive actions and workflow transitions for auditability.
-7. Test critical authorization, workflow, and concurrency paths.
-
-## Delivery roadmap
-
-- [x] Initial monorepo and API/web application scaffold
-- [x] Authentication, tenant onboarding, and organization context
-- [x] Initial users, roles, and role-based route guard
-- [x] Contract repository API, metadata, tenant-scoped search, and document versioning
-- [x] Private S3-compatible upload/download URL workflow
-- [x] Configurable multi-stage approval workflow engine with ANY/ALL approvers and decision history
-- [x] Governed templates, dynamic fields, versioned clause library, and draft contract generation
-- [x] Initial obligations and renewal tracking with derived notice deadlines
-- [x] Vendor/counterparty directory, contract linkage, compliance expiry visibility, and human-reviewed risk assessments\n- [ ] Automated notifications and durable scheduled jobs
-- [x] Evidence-grounded contract clause extraction, deterministic risk flags, missing-term detection, and analysis history (rules-based baseline; no external LLM integration yet)
-- [x] PDF/DOCX text extraction and optional provider-backed AI analysis with evidence grounding\n- [ ] Semantic contract comparison, OCR, durable background processing, and production hardening
-
-## Development commands
-
-```bash
-npm run dev
-npm run build
-npm run typecheck
-npm run test --workspace @contractsphere/api
-```
-
-## Environment and security
-
-See `apps/api/.env.example`. Set a unique random `JWT_ACCESS_SECRET` (at least 32 characters) before production deployment. Never commit real credentials, private keys, production connection strings, or uploaded contract documents.
-
-The current refresh-session store uses MongoDB TTL cleanup and an in-process rate limiter. For horizontally scaled production deployment, configure a shared rate-limit store and operational session revocation/monitoring.
-
-## Security disclosure
-
-Do not open public issues containing credentials, personal data, confidential contracts, or exploitable vulnerability details. Report security concerns privately to the repository maintainer.
-
-## License
-
-License to be selected before public distribution. Until then, all rights are reserved.
-
-
-## Audit trail and in-app notifications
-
-All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+### Obligations and renewals
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/audit-events` | Search tenant audit history (OWNER/ADMIN) |
-| GET | `/notifications` | List the signed-in user's notifications and unread count |
-| PATCH | `/notifications/:notificationId/read` | Mark one notification read |
-| PATCH | `/notifications/read-all` | Mark all of the signed-in user's notifications read |
+| POST | /obligations | Create obligation |
+| GET | /obligations | Filter and paginate obligations |
+| PATCH | /obligations/:obligationId | Update status or obligation fields |
+| GET | /obligations/renewals | List renewal schedules and summary |
+| PUT | /obligations/renewals/:contractId | Create/update renewal schedule |
+| PATCH | /obligations/renewals/:renewalId/status | Update renewal lifecycle state |
 
-Audit events are written for contract creation/updates, document upload activity, workflow definition/submission/decisions, obligation and renewal changes, and vendor profile/risk changes. Audit reads are tenant-scoped and restricted to OWNER/ADMIN. The API exposes no audit update/delete routes; this is application-level append-only behavior, not a claim of database-level immutability. Production deployments should use a dedicated database role that denies update/delete on the audit collection, backups, retention controls, and optionally tamper-evident hash chaining or WORM storage.
-
-Notifications are private to the recipient and tenant. Submitting a contract for approval creates deduplicated in-app notifications for assigned approvers. Notification read state is updated only by the owning user. Email delivery, push delivery, scheduled reminders, and a durable job queue are not included in this milestone; they require delivery-provider and worker infrastructure.
-
-
-## Contract intelligence API
-
-All routes require an access token and are scoped to the authenticated tenant. Contract owners/creators and OWNER/ADMIN users can analyze or view a contract's reports.
+### Vendors and counterparties
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/contracts/:contractId/intelligence/analyze` | Analyze pasted text with RULE_BASED or AI_COMPATIBLE engine |
-| POST | `/contracts/:contractId/intelligence/documents/:fileId/analyze` | Extract and analyze a private PDF/DOCX version |
-| GET | `/contracts/:contractId/intelligence` | List the latest 20 analysis reports |
+| POST | /vendors | Create vendor profile (OWNER/ADMIN) |
+| GET | /vendors | Search and filter vendors |
+| GET | /vendors/:vendorId/overview | Read linked contract and portfolio overview |
+| PATCH | /vendors/:vendorId | Update profile (OWNER/ADMIN) |
+| POST | /vendors/:vendorId/assessments | Record human-reviewed risk assessment |
 
-The platform supports a deterministic rules-based engine and an optional OpenAI-compatible provider configured by AI_API_KEY, AI_BASE_URL, and AI_MODEL. AI analysis is opt-in per request; when enabled, the source contract text is sent to that configured provider. Review its retention and processing terms before enabling it. Provider responses are schema-validated and every AI finding is retained only when its quoted evidence exactly matches the source text. The API does not expose provider credentials to the browser, and the model receives no tools or authority to approve/sign contracts. Reports store a SHA-256 source fingerprint and evidence excerpts, not the complete source text.
+### Templates and clause library
 
-PDF and DOCX extraction is supported for private stored contract versions up to 10 MB, with a 30,000-character extracted-text limit. Encrypted, damaged, image-only/scanned PDFs and OCR are not supported. Only authorized contract owners/creators and OWNER/ADMIN users can analyze or retrieve reports. False positives/negatives are possible; findings are not legal advice and require qualified human review.
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | /templates | List templates |
+| GET | /templates/:templateId | Read template |
+| POST | /templates | Create draft template (OWNER/ADMIN) |
+| PATCH | /templates/:templateId | Edit draft template |
+| POST | /templates/:templateId/submit | Submit template for approval |
+| POST | /templates/:templateId/approve | Independently approve template |
+| POST | /templates/:templateId/revisions | Create revision from approved template |
+| GET | /templates/clauses | List active clauses |
+| POST | /templates/clauses | Create clause version 1 |
+| PATCH | /templates/clauses/:clauseId | Update clause metadata or wording version |
+| POST | /templates/:templateId/generate | Generate DRAFT contract from approved template |
+
+### Intelligence and comparison
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | /contracts/:contractId/intelligence/analyze | Analyze pasted contract text |
+| POST | /contracts/:contractId/intelligence/documents/:fileId/analyze | Extract and analyze stored PDF/DOCX |
+| GET | /contracts/:contractId/intelligence | Read latest 20 analysis reports |
+| POST | /contracts/:contractId/intelligence/compare | Compare two pasted texts or two stored document versions |
+| GET | /contracts/:contractId/intelligence/comparisons | Read latest 20 version comparisons |
+
+For pasted comparison, submit baselineText, candidateText and optional labels. For stored-version comparison, submit baselineFileId and candidateFileId; both file IDs must belong to the same authorized contract. Each source is limited to 30,000 extracted characters.
+
+### Audit and notifications
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | /audit-events | Search tenant audit history (OWNER/ADMIN) |
+| GET | /notifications | Read current user's notifications and unread count |
+| PATCH | /notifications/:notificationId/read | Mark one notification read |
+| PATCH | /notifications/read-all | Mark all current user's notifications read |
+
+---
+
+## 6. Intelligence methodology and limitations
+
+### Deterministic review
+The rules-based engine checks selected categories including confidentiality, limitation of liability, indemnification, termination, governing law, dispute resolution, payment, data protection, renewal and force majeure. It flags selected patterns such as potentially uncapped liability, broad indemnity, unclear automatic-renewal notice and selected missing terms.
+
+These are pattern-based signals, not complete legal analysis. Clause wording, jurisdiction, definitions, exceptions, schedules, cross-references and surrounding context can change legal meaning.
+
+### Optional provider-backed review
+- Provider is configured exclusively on the server.
+- Provider output must conform to a strict schema.
+- AI evidence quotations must match the source text exactly to be retained.
+- Reports retain bounded evidence excerpts and a SHA-256 fingerprint, not the complete source text.
+- The integration does not autonomously approve, sign, negotiate or execute contracts.
+
+### Document extraction
+- Supported: text-based PDF and DOCX.
+- Maximum stored-document analysis size: 10 MiB.
+- Maximum extracted text: 30,000 characters.
+- Not supported: OCR for scanned/image-only PDF, encrypted documents, malware scanning, advanced table reconstruction or guaranteed extraction of complex layouts.
+- Upload metadata verification is not a substitute for file-signature validation or malware scanning.
+
+### Comparison methodology
+- Sentence-level additions/removals use normalized exact sentence matching.
+- Clause changes use deterministic clause-category detection.
+- Risk movement compares deterministic finding keys and severity.
+- Similarity is a sentence-set overlap indicator.
+- It is not semantic embedding search, a legal redline, or a conclusion that changed clauses are legally equivalent.
+
+**All intelligence outputs require qualified human review. They are not legal advice and must not be used as the sole basis for signing, rejecting or executing an agreement.**
+
+---
+
+## 7. Security and enterprise considerations
+
+### Implemented controls
+1. Verified authentication claims provide tenant context.
+2. Tenant-owned reads and writes are scoped server-side.
+3. Contract-level authorization is checked for intelligence and comparison operations.
+4. Zod validates request payloads and resource identifiers.
+5. Refresh tokens are opaque, hashed at rest, rotated and revocable.
+6. Refresh/logout enforce the configured browser origin.
+7. Documents use short-lived signed URLs and private object storage.
+8. AI credentials remain server-side; provider output is schema-validated and evidence-grounded.
+9. Audit and notification access is tenant/recipient scoped.
+10. Workflow decisions use conditional state transitions to reduce duplicate decisions.
+
+### Production hardening still required
+- Malware scanning, file-signature and archive-bomb checks before document processing.
+- OCR pipeline for scanned agreements, with page-level provenance.
+- Shared rate-limit storage for horizontally scaled API instances.
+- Durable background jobs, retry/dead-letter handling and scheduled obligation/renewal reminders.
+- Email and push notification delivery with provider webhooks and delivery audit.
+- Database least-privilege roles, backups, restore drills, retention and disaster recovery.
+- Database-enforced audit immutability or tamper-evident/WORM audit storage.
+- Centralized secrets management, key rotation and credential monitoring.
+- Observability: structured logs, metrics, traces, alerting and SLOs.
+- Security review of dependencies and repeatable vulnerability remediation.
+- Formal privacy/data-processing review for any external AI provider.
+- End-to-end tests for tenant isolation, access control, storage and workflow concurrency.
+- Deployment-specific TLS, CORS, CSP, cookie and network policies.
+
+A passing CI build is not a production security certification.
+
+---
+
+## 8. Quality checks
+
+Run checks from the repository root:
+
+    npm run typecheck
+    npm run build
+    npm run test --workspace @contractsphere/api
+
+GitHub Actions runs dependency installation, TypeScript type checking, application build and API tests for changes to main and pull requests.
+
+---
+
+## 9. Dashboard showcase
+
+The gallery is generated from the **actual Vue dashboard components** using Playwright Chromium and deterministic synthetic showcase data. It contains no customer information and does not claim to show a live production tenant. The capture workflow refreshes the twelve PNGs after application changes and commits them under docs/screenshots/.
+
+Run locally:
+
+    npx playwright install chromium
+    npm run screenshots
+
+The capture script starts the Vite web app, supplies a controlled demo session and mocked API fixtures, exercises the intelligence and comparison views, and saves twelve individual dashboard screenshots. Each image is presented below in a single-column gallery.
+
+### 01 — Executive workspace
+A polished entry point into the organization workspace, emphasizing ownership, operating context and the primary dashboard surface.
+
+![ContractSphere executive workspace](docs/screenshots/01-executive-workspace.png)
+
+### 02 — Contract portfolio
+A portfolio snapshot that gives legal and operations teams visibility into contract volume, execution status and document coverage.
+
+![Contract portfolio overview](docs/screenshots/02-contract-portfolio.png)
+
+### 03 — Lifecycle performance
+A commitment-focused view of open obligations, overdue items, notice deadlines and renewals in progress.
+
+![Lifecycle performance metrics](docs/screenshots/03-lifecycle-performance.png)
+
+### 04 — AI-assisted contract review
+The evidence-led intelligence workspace, showing review findings, severity, confidence and source excerpts. The showcase report is synthetic and demonstrates the interface, not a legal conclusion.
+
+![AI-assisted contract review](docs/screenshots/04-ai-contract-review.png)
+
+### 05 — Contract version comparison
+A negotiation-review surface for clause changes, risk movement, additions and removals between an earlier and proposed agreement.
+
+![Contract version comparison](docs/screenshots/05-version-comparison.png)
+
+### 06 — Approval governance
+Workflow configuration and the assigned reviewer queue bring decision ownership and multi-stage governance into the same operational view.
+
+![Approval workflow governance](docs/screenshots/06-approval-governance.png)
+
+### 07 — Obligation management
+A practical view of payment, compliance and delivery commitments, including ownership, due dates and action states.
+
+![Obligation management](docs/screenshots/07-obligation-management.png)
+
+### 08 — Renewal calendar
+Renewal expiry and notice deadlines are surfaced together so teams can plan renewal, renegotiation or termination decisions ahead of critical dates.
+
+![Renewal calendar](docs/screenshots/08-renewal-calendar.png)
+
+### 09 — Template and clause governance
+Reusable legal language, version-pinned clauses, structured fields and independent template approval support consistent contract creation.
+
+![Template and clause governance](docs/screenshots/09-template-and-clause-governance.png)
+
+### 10 — Third-party risk
+Vendor profiles and human-reviewed risk signals give procurement and legal teams a shared counterparty context.
+
+![Third-party risk management](docs/screenshots/10-third-party-risk.png)
+
+### 11 — Contract intake
+A focused intake form captures key agreement metadata before a record enters the organization's controlled repository.
+
+![Contract intake](docs/screenshots/11-contract-intake.png)
+
+### 12 — Searchable agreement repository
+The repository view brings agreement identity, counterparty, lifecycle status, version history and document actions together.
+
+![Searchable contract repository](docs/screenshots/12-searchable-repository.png)
+
+---
+
+## 10. Project roadmap
+
+- [x] Monorepo scaffold and Vue/Express application
+- [x] Organization onboarding, authentication and role model
+- [x] Tenant-scoped contract repository and document version metadata
+- [x] Private S3-compatible upload/download workflow
+- [x] Multi-stage approval workflow engine
+- [x] Obligation and renewal tracking
+- [x] Vendor/counterparty directory and human-reviewed risk assessments
+- [x] Governed templates, dynamic fields and versioned clause library
+- [x] Audit events and in-app notifications
+- [x] Rules-based contract intelligence with source evidence
+- [x] PDF/DOCX extraction and optional provider-backed analysis
+- [x] Contract version comparison with clause and risk-change summaries
+- [x] Playwright dashboard showcase capture for twelve screens
+- [ ] OCR and page-level evidence provenance
+- [ ] Semantic comparison and legally meaningful redline review
+- [ ] Durable jobs, reminders and outbound notification delivery
+- [ ] Malware scanning and deeper document validation
+- [ ] Database-enforced audit immutability and enterprise retention controls
+- [ ] End-to-end security, performance and disaster-recovery validation
+
+---
+
+## 11. Contributing and security reporting
+
+Contributions should preserve tenant isolation, resource-level authorization, input validation, evidence provenance and human oversight for legal decisions. Add tests for new domain behavior and update this README when API contracts or operational requirements change.
+
+Do not open public issues containing credentials, personal data, confidential contracts or exploitable vulnerability details. Report security concerns privately to the repository maintainer.
+
+## 12. License
+
+A license has not yet been selected. Until a license is added, all rights are reserved; do not assume the repository grants permission to redistribute or use the software.
