@@ -101,7 +101,7 @@ Every agreement should have an accountable owner, a traceable document history, 
 - Provider credentials never enter browser code.
 - Full source contract text is not persisted in intelligence reports; reports store fingerprints, labels, lengths and limited evidence excerpts.
 - A MongoDB-backed durable job queue automatically starts rules-based analysis after a clean upload is registered. Jobs expose queued, processing, succeeded and failed states, retry transient failures up to three attempts with backoff, and recover expired worker leases after process restarts.
-- The authenticated `GET /api/v1/contracts/intelligence/jobs` endpoint returns the latest 30 processing jobs and tenant-scoped status totals. Members see only jobs for contracts they own or created; owners and administrators see the organization queue. The dashboard refreshes processing status every five seconds and displays attempts and terminal failure details.
+- The authenticated `GET /api/v1/contracts/intelligence/jobs` endpoint returns the latest 30 processing jobs and tenant-scoped status totals. Members see only jobs for contracts they own or created; owners and administrators see the organization queue. The dashboard refreshes processing status every five seconds and displays attempts and terminal failure details. An hourly API scheduler creates deduplicated in-app reminders for obligations due within three days or overdue, and renewal notice deadlines within seven days or overdue.
 
 ### Contract version comparison
 - Compare two pasted contract texts or two stored PDF/DOCX versions belonging to the same contract.
@@ -401,7 +401,7 @@ These are pattern-based signals, not complete legal analysis. Clause wording, ju
 ### Production hardening still required
 - Page-level OCR evidence provenance and multilingual OCR.
 - Shared rate-limit storage for horizontally scaled API instances.
-- Scheduled obligation/renewal reminders and outbound email/push delivery with provider webhooks.
+- Outbound email/push delivery with provider webhooks and delivery audit.
 - Database least-privilege roles, backups, restore drills, retention and disaster recovery.
 - Database-enforced audit immutability or tamper-evident/WORM audit storage.
 - Centralized secrets management, key rotation and credential monitoring.
@@ -522,7 +522,7 @@ The repository view brings agreement identity, counterparty, lifecycle status, v
 - [x] Playwright dashboard showcase capture for twelve screens
 - [ ] Page-level OCR evidence provenance and multilingual OCR
 - [ ] Semantic comparison and legally meaningful redline review
-- [ ] Scheduled reminders and outbound notification delivery
+- [x] Scheduled in-app obligation and renewal reminders\n- [ ] Outbound email/push notification delivery with provider webhooks
 - [ ] Database-enforced audit immutability and enterprise retention controls
 - [ ] End-to-end security, performance and disaster-recovery validation
 - [ ] Production readiness, dependency and infrastructure configuration review
