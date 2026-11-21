@@ -25,7 +25,6 @@ export const createContractSchema = contractFields.superRefine(validateDateRange
 export const updateContractSchema = contractFields.partial().omit({ contractNumber: true }).extend({
   status: z.enum(CONTRACT_STATUSES).optional()
 }).superRefine(validateDateRange);
-
 export const listContractsSchema = z.object({
   q: z.string().trim().max(120).optional(),
   status: z.enum(CONTRACT_STATUSES).optional(),
@@ -37,7 +36,14 @@ export const listContractsSchema = z.object({
   order: z.enum(["asc", "desc"]).default("desc")
 });
 export const uploadIntentSchema = z.object({
-  filename: z.string().trim().min(1).max(255).refine(value => !/[\\/\\0]/.test(value), "Filename must not contain path characters."),
+  filename: z.string().trim().min(1).max(255)
+    .refine(value => !/[\\/\0]/.test(value), "Filename must not contain path characters.")
+    .refine(value => /\.(pdf|docx)$/i.test(value), "Only .pdf and .docx filenames are supported."),
   contentType: z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]),
   sizeBytes: z.number().int().min(1).max(25 * 1024 * 1024)
+}).superRefine((value, ctx) => {
+  const isPdf = value.filename.toLowerCase().endsWith(".pdf");
+  if (isPdf !== (value.contentType === "application/pdf")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["contentType"], message: "Filename extension and declared content type must match." });
+  }
 });
