@@ -91,27 +91,20 @@ async function main() {
   await sourceTextarea.fill(source);
   await sourceTextarea.dispatchEvent("input");
   await sourceTextarea.dispatchEvent("change");
-  // Vue's v-model can lag behind programmatic browser input in headless CI.
-  // Set the component's public reactive state as a deterministic fallback so
-  // this screenshot fixture tests the dashboard rather than browser event quirks.
-  await page.evaluate(async ({ contractId, sourceText }) => {
-   const instance = document.querySelector("#app")?.__vue_app__?._instance;
-   const dashboard = instance?.proxy;
-   if (!dashboard) throw new Error("Could not access the mounted Vue dashboard instance.");
-   dashboard.intelligenceContractId = contractId;
-   dashboard.intelligenceSourceLabel = "Enterprise services agreement — showcase fixture";
-   dashboard.intelligenceSource = sourceText;
-   dashboard.$forceUpdate();
-   await dashboard.$nextTick();
-  }, { contractId: id, sourceText: source });
+  // Submit the Vue form event directly after Playwright has filled the real
+  // controls. This exercises the production submit handler without mutating
+  // private component internals or depending on a disabled-state repaint.
   await page.waitForTimeout(250);
   const selectedContract = await page.locator(".intelligence-panel select").first().inputValue();
   const sourceLength = await page.locator(".intelligence-panel form textarea").first().inputValue().then(value => value.trim().length);
-  const submitDisabled = await page.locator(".intelligence-panel form button[type=submit]").first().isDisabled();
-  const reactiveDebug = await page.evaluate(() => { const state = document.querySelector("#app")?.__vue_app__?._instance?.setupState; return { contractId: state?.intelligenceContractId, sourceLength: state?.intelligenceSource?.trim?.().length, sourceLabel: state?.intelligenceSourceLabel, analyzing: state?.analyzingContract, buttonDisabled: document.querySelector(".intelligence-panel form button[type=submit]")?.disabled }; });
-  process.stdout.write(`Showcase debug: contract=${selectedContract}, sourceLength=${sourceLength}, submitDisabled=${submitDisabled}, reactive=${JSON.stringify(reactiveDebug)}\\n`);
-  await page.waitForFunction(() => { const button = document.querySelector(".intelligence-panel form button[type=submit]"); return button instanceof HTMLButtonElement && !button.disabled; }, null, { timeout:10000 });
-  await page.locator(".intelligence-panel form button[type=submit]").first().click();
+  const reactiveDebug = await page.evaluate(() => { const state = document.querySelector("#app")?.__vue_app__?._instance?.setupState; return { contractId: state?.intelligenceContractId, sourceLength: state?.intelligenceSource?.trim?.().length, sourceLabel: state?.intelligenceSourceLabel }; });
+  process.stdout.write(`Showcase fixture: contract=${selectedContract}, sourceLength=${sourceLength}, reactive=${JSON.stringify(reactiveDebug)}\\n`);
+  if (selectedContract !== id || sourceLength < 100 || reactiveDebug.contractId !== id || reactiveDebug.sourceLength < 100) {
+   throw new Error("Showcase form values were not synchronized before submission.");
+  }
+  await page.locator(".intelligence-panel form").evaluate(form => {
+   form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
   await page.waitForSelector(".intelligence-results");
   const compareForm = page.locator(".comparison-workspace form");
   await compareForm.locator("textarea").nth(0).fill(source.replace("The supplier's liability under this agreement shall be unlimited.", "The supplier's aggregate liability shall not exceed fees paid in the preceding twelve months."));
