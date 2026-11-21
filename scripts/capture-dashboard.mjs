@@ -83,6 +83,10 @@ async function main() {
   await contractSelect.dispatchEvent("input");
   await contractSelect.dispatchEvent("change");
   const source = "This Master Services Agreement is entered into by the parties. The parties agree to confidentiality obligations and shall protect personal data. This agreement is governed by the laws of England. The supplier shall maintain insurance and indemnify the customer for all claims. This agreement will automatically renew for successive one-year terms. The supplier's liability under this agreement shall be unlimited. The parties agree to payment terms and termination rights.";
+  const sourceLabelInput = page.locator(".intelligence-panel form input").first();
+  await sourceLabelInput.fill("Enterprise services agreement — showcase fixture");
+  await sourceLabelInput.dispatchEvent("input");
+  await sourceLabelInput.dispatchEvent("change");
   const sourceTextarea = page.locator(".intelligence-panel form textarea").first();
   await sourceTextarea.fill(source);
   await sourceTextarea.dispatchEvent("input");
