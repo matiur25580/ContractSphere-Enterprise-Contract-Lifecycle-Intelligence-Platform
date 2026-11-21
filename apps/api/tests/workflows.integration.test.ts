@@ -12,7 +12,7 @@ const newId = () => new Types.ObjectId();
 describe.skipIf(!uri)("workflow service — MongoDB integration", () => {
   const tenantId = newId();
   const otherTenantId = newId();
-  let ownerId: Types.ObjectId;
+  let ownerId: Types.ObjectId = newId();
   let approverA: Types.ObjectId;
   let approverB: Types.ObjectId;
 
