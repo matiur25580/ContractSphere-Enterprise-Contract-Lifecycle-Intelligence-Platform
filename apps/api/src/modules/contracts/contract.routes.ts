@@ -22,7 +22,7 @@ const idParam = (req: Parameters<RequestHandler>[0], key: string) => {
   return value;
 };
 const audit = (req: Parameters<RequestHandler>[0], action: string, resourceId: string, summary: string, metadata?: Record<string, string | number | boolean | null>) =>
-  recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action, resourceType: "CONTRACT", resourceId, summary, metadata, requestId: req.header("x-request-id") });
+  recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action, resourceType: "CONTRACT", resourceId, summary, ...(metadata ? { metadata } : {}), ...(req.header("x-request-id") ? { requestId: req.header("x-request-id")! } : {}) });
 
 contractRouter.post("/", validate(createContractSchema), asyncHandler(async (req, res) => {
   const contract = await createContract(req.auth!.tenantId, req.auth!.userId, req.body);

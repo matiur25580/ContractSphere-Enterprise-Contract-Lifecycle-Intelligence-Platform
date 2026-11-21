@@ -38,7 +38,8 @@ obligationRouter.get("/", validateQuery(listObligationsSchema), asyncHandler(asy
 }));
 obligationRouter.patch("/:obligationId", validateBody(updateObligationSchema), asyncHandler(async (req, res) => {
   const obligation = await updateObligation(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "obligationId"), req.body);
-  if (!obligation) throw new HttpError(404, "Obligation not found.", "OBLIGATION_NOT_FOUND");\n  await audit(req, "OBLIGATION_UPDATED", "OBLIGATION", obligation.id, "Updated obligation status or details");
+  if (!obligation) throw new HttpError(404, "Obligation not found.", "OBLIGATION_NOT_FOUND");
+  await audit(req, "OBLIGATION_UPDATED", "OBLIGATION", obligation.id, "Updated obligation status or details");
   res.json({ success: true, data: { obligation } });
 }));
 obligationRouter.get("/renewals", validateQuery(renewalQuerySchema), asyncHandler(async (req, res) => {

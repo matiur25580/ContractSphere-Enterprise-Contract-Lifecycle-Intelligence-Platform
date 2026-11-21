@@ -5,13 +5,14 @@ const oid = (value: string) => new Types.ObjectId(value);
 
 export async function recordAuditEvent(input: {
   tenantId: string; actorId: string; action: string; resourceType: string;
-  resourceId: string; summary: string; metadata?: Record<string, string | number | boolean | null>;
-  requestId?: string;
+  resourceId: string; summary: string;
+  metadata?: Record<string, string | number | boolean | null> | undefined;
+  requestId?: string | undefined;
 }) {
   return AuditEvent.create({
     tenantId: oid(input.tenantId), actorId: oid(input.actorId), action: input.action,
     resourceType: input.resourceType, resourceId: input.resourceId, summary: input.summary,
-    metadata: input.metadata ?? {}, requestId: input.requestId
+    metadata: input.metadata ?? {}, ...(input.requestId ? { requestId: input.requestId } : {})
   });
 }
 
