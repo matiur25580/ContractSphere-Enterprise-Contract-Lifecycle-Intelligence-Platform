@@ -41,6 +41,22 @@ export async function getDocumentAnalysisJob(tenantId: string, userId: string, r
   return job;
 }
 
+export async function listRecentDocumentJobs(tenantId: string, userId: string, role: string) {
+  const tenant = oid(tenantId);
+  const filter: Record<string, unknown> = { tenantId: tenant };
+  if (!["OWNER", "ADMIN"].includes(role)) {
+    const contracts = await Contract.find({ tenantId: tenant, $or: [{ ownerId: oid(userId) }, { createdBy: oid(userId) }] }).select("_id").lean();
+    filter.contractId = { $in: contracts.map(contract => contract._id) };
+  }
+  const [jobs, totals] = await Promise.all([
+    DocumentProcessingJob.find(filter).sort({ createdAt: -1 }).limit(30).select("status attempts maxAttempts errorCode errorMessage reportId fileId contractId createdAt updatedAt startedAt completedAt").populate("contractId", "title contractNumber").populate("fileId", "originalName version").lean(),
+    DocumentProcessingJob.aggregate([{ $match: filter }, { $group: { _id: "$status", count: { $sum: 1 } } }])
+  ]);
+  const summary = { queued: 0, processing: 0, succeeded: 0, failed: 0 };
+  for (const item of totals) { const key = String(item._id).toLowerCase() as keyof typeof summary; if (key in summary) summary[key] = item.count; }
+  return { jobs, summary };
+}
+
 async function claimJob() {
   const now = new Date();
   const expiredLease = new Date(now.getTime() - LEASE_MS);
