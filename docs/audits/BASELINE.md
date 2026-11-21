@@ -147,3 +147,41 @@ This section records findings confirmed during the subsequent PR and source revi
 - Main CI run 44929216169 for merge commit `7c0113ff595c127eeccf987c084e5c779337ac9f` completed successfully.
 - Main dashboard screenshot run 44929216174 was in progress when this section was authored; no success is claimed.
 - No production deployment, cloud configuration review, penetration test, or production-like database integration suite has been performed by this audit.
+
+
+## Verification update — post-PR #12 (2026-11-21)
+
+### Confirmed CI and browser evidence
+
+- Main CI run [44930340521](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44930340521) completed with conclusion **success** on merge commit `c8fb942284bc4f2de24322316d7396be1be083e5`.
+- Dashboard screenshot run [44930340356](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44930340356) completed with conclusion **success** on the same merge commit.
+- This verifies that the main CI workflow and configured dashboard screenshot workflow passed for this revision. It does not constitute a production-like end-to-end test or prove every browser flow.
+
+### F-06 follow-up — workflow/contract consistency
+
+- **Status:** Source-level concern remains open; no runtime failure has been reproduced.
+- The current workflow service still writes a terminal state to `WorkflowInstance` and then separately attempts to update the associated `Contract`. The contract update result is not checked. A failure between these writes can leave workflow and contract state inconsistent.
+- The workflow instance and definition schemas have a unique partial index for one active workflow per tenant/contract and a tenant/name unique index for definitions. These indexes protect duplicate active instances and duplicate definition names, but do not make the workflow/contract state transition atomic.
+- **Next verification:** replica-set-backed integration tests should force contract-write failure after the workflow transition. Remediation should use a transaction where supported, or a durable recoverable transition/outbox plus reconciliation. Do not mark this risk resolved based only on the green CI run.
+
+### F-07/F-08 follow-up — authentication/session behavior
+
+- The access middleware validates JWT signature and required claims but does not re-check current user/tenant status on every request. Account deactivation therefore does not immediately invalidate already-issued access tokens; the effective window is bounded by access-token expiry unless another revocation control exists.
+- Refresh rotation atomically consumes an unrevoked, unexpired token and checks that both user and tenant remain active before issuing a replacement. Reuse of the consumed token is rejected. The inspected refresh-session schema has no token-family identifier, so family-wide revocation on replay is not implemented in the reviewed code.
+- These are explicit session-policy decisions requiring threat-model and integration-test coverage, not evidence that authentication is bypassable.
+
+### F-09 — Document worker lease expiry can permit duplicate processing side effects
+
+- **Severity:** Medium; operational risk requiring database-backed reproduction.
+- **Evidence:** The worker claims a job with a five-minute lease and reclaims expired `PROCESSING` jobs. Successful analysis writes a report before the worker conditionally marks the job `SUCCEEDED` using its worker ID.
+- **Risk:** If analysis runs longer than the lease, another worker may reclaim the same job while the original analysis is still running. The old worker's final job update is fenced by `lockedBy`, but any report or other side effect created before that update may already have occurred. This can produce duplicate analysis side effects even though only one worker ultimately owns the job record.
+- **Recommended action:** Add an integration test with a deliberately delayed analysis exceeding the lease. Consider lease renewal/heartbeat and idempotency keys or a unique report/job relationship so side effects are safe under retries and lease takeover. Verify shutdown and retry behavior as well.
+- **Status:** Risk identified from source inspection; no duplicate side effect has been reproduced.
+
+### Current evidence and remaining limitations
+
+- PRs #2–#12 are merged to `main`; PR #1 remains stale/open and is not treated as an accepted fix.
+- Main CI and dashboard screenshot workflows passed for merge commit `c8fb942284bc4f2de24322316d7396be1be083e5`.
+- The current test suite includes validation-focused auth/workflow tests and basic document-job lifecycle/OCR helper tests. It does not yet provide the database-backed concurrency and authorization matrix described above.
+- The root workspace still has no committed `package-lock.json`; CI continues to use `npm install`. Reproducible dependency installation remains outstanding.
+- No local clean install, local test/build execution, replica-set integration suite, production cloud configuration review, penetration test, or deployment has been performed as part of this remote review.
