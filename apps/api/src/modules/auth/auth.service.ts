@@ -64,7 +64,7 @@ export async function login(input: { organizationSlug: string; email: string; pa
     throw new HttpError(401, "Invalid organization, email, or password.", "INVALID_CREDENTIALS");
   }
   const refresh = await createRefreshSession(user.id, tenant.id);
-  return { accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }), refreshToken: refresh.token, refreshExpiresAt: refresh.expiresAt, user: publicUser(user, tenant) };
+  return { accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }, refresh.familyId), refreshToken: refresh.token, refreshExpiresAt: refresh.expiresAt, user: publicUser(user, tenant) };
 }
 
 export async function rotateRefreshToken(token: string) {
@@ -113,7 +113,7 @@ export async function rotateRefreshToken(token: string) {
 
       const refresh = await createRefreshSession(user.id, tenant.id, familyId, dbSession);
       result = {
-        accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }),
+        accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }, refresh.familyId),
         refreshToken: refresh.token,
         refreshExpiresAt: refresh.expiresAt,
         user: publicUser(user, tenant)
