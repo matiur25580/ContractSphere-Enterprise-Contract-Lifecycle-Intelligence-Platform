@@ -17,11 +17,13 @@ export async function createTemplate(tenantId: string, userId: string, input: Re
  return ContractTemplate.create({ ...input, tenantId: oid(tenantId), createdBy: oid(userId), updatedBy: oid(userId) });
 }
 export async function updateTemplate(tenantId: string, userId: string, templateId: string, input: Record<string, any>) {
- const template = await ContractTemplate.findOne({ _id: templateId, tenantId: oid(tenantId), status: "DRAFT" });
- if (!template) throw new HttpError(404, "Draft template not found.", "TEMPLATE_NOT_FOUND");
  await validateClauseReferences(tenantId, input.sections);
- Object.assign(template, input, { updatedBy: oid(userId) });
- await template.save();
+ const template = await ContractTemplate.findOneAndUpdate(
+  { _id: templateId, tenantId: oid(tenantId), status: "DRAFT" },
+  { $set: { ...input, updatedBy: oid(userId) } },
+  { new: true, runValidators: true }
+ );
+ if (!template) throw new HttpError(409, "The template is no longer a draft. Refresh before editing.", "TEMPLATE_STATE_CONFLICT");
  return template;
 }
 export async function submitTemplate(tenantId: string, templateId: string) {
@@ -30,11 +32,15 @@ export async function submitTemplate(tenantId: string, templateId: string) {
  return template;
 }
 export async function approveTemplate(tenantId: string, approverId: string, templateId: string) {
- const template = await ContractTemplate.findOne({ _id: templateId, tenantId: oid(tenantId), status: "PENDING_APPROVAL" });
- if (!template) throw new HttpError(404, "Pending template not found.", "TEMPLATE_NOT_FOUND");
- if (template.createdBy.toString() === approverId) throw new HttpError(403, "A different owner or administrator must approve this template.", "SELF_APPROVAL_FORBIDDEN");
- template.status = "APPROVED"; template.approvedAt = new Date(); template.approvedBy = oid(approverId); template.updatedBy = oid(approverId);
- await template.save();
+ const pending = await ContractTemplate.findOne({ _id: templateId, tenantId: oid(tenantId), status: "PENDING_APPROVAL" }).select("createdBy").lean();
+ if (!pending) throw new HttpError(404, "Pending template not found.", "TEMPLATE_NOT_FOUND");
+ if (pending.createdBy.toString() === approverId) throw new HttpError(403, "A different owner or administrator must approve this template.", "SELF_APPROVAL_FORBIDDEN");
+ const template = await ContractTemplate.findOneAndUpdate(
+  { _id: templateId, tenantId: oid(tenantId), status: "PENDING_APPROVAL", createdBy: { $ne: oid(approverId) } },
+  { $set: { status: "APPROVED", approvedAt: new Date(), approvedBy: oid(approverId), updatedBy: oid(approverId) } },
+  { new: true, runValidators: true }
+ );
+ if (!template) throw new HttpError(409, "The template approval state changed. Refresh and try again.", "TEMPLATE_STATE_CONFLICT");
  return template;
 }
 export async function createTemplateRevision(tenantId: string, userId: string, templateId: string) {
