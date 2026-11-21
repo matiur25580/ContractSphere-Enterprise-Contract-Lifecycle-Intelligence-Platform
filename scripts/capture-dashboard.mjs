@@ -77,10 +77,11 @@ async function main() {
   });
   await page.goto(baseUrl, { waitUntil:"networkidle" });
   await page.waitForSelector(".workspace-heading", { timeout:30000 });
-  await page.waitForTimeout(500);
+  await page.locator(`.intelligence-panel select option[value="${id}"]`).waitFor({ state:"attached", timeout:30000 });
   await page.locator(".intelligence-panel select").first().selectOption(id);
   const source = "This Master Services Agreement is entered into by the parties. The parties agree to confidentiality obligations and shall protect personal data. This agreement is governed by the laws of England. The supplier shall maintain insurance and indemnify the customer for all claims. This agreement will automatically renew for successive one-year terms. The supplier's liability under this agreement shall be unlimited. The parties agree to payment terms and termination rights.";
   await page.locator(".intelligence-panel form textarea").first().fill(source);
+  await page.waitForFunction(() => { const button = document.querySelector(".intelligence-panel form button[type=submit]"); return button instanceof HTMLButtonElement && !button.disabled; }, null, { timeout:10000 });
   await page.locator(".intelligence-panel form button[type=submit]").first().click();
   await page.waitForSelector(".intelligence-results");
   const compareForm = page.locator(".comparison-workspace form");
