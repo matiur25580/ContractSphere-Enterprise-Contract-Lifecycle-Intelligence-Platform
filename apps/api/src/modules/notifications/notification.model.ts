@@ -1,4 +1,4 @@
-import { Schema, model, models } from "mongoose";
+import { Schema, model, models, type Model } from "mongoose";
 
 const notificationSchema = new Schema({
   tenantId: { type: Schema.Types.ObjectId, required: true },
@@ -14,4 +14,4 @@ const notificationSchema = new Schema({
 notificationSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
 notificationSchema.index({ tenantId: 1, userId: 1, readAt: 1, createdAt: -1 });
 notificationSchema.index({ tenantId: 1, userId: 1, dedupeKey: 1 }, { unique: true, partialFilterExpression: { dedupeKey: { $type: "string" } } });
-export const Notification = models.Notification || model("Notification", notificationSchema);
+export const Notification = (models.Notification as Model<any> | undefined) ?? model("Notification", notificationSchema);

@@ -4,7 +4,7 @@ import { Notification } from "./notification.model.js";
 const oid = (value: string) => new Types.ObjectId(value);
 
 export async function createUserNotification(input: {
-  tenantId: string; userId: string; type: string; title: string; body: string; link?: string; dedupeKey?: string;
+  tenantId: string; userId: string; type: string; title: string; body: string; link?: string | undefined; dedupeKey?: string | undefined;
 }) {
   try {
     return await Notification.create({ ...input, tenantId: oid(input.tenantId), userId: oid(input.userId) });
@@ -15,7 +15,7 @@ export async function createUserNotification(input: {
 }
 
 export async function createNotificationsForUsers(input: {
-  tenantId: string; userIds: string[]; type: string; title: string; body: string; link?: string; dedupeKey?: string;
+  tenantId: string; userIds: string[]; type: string; title: string; body: string; link?: string | undefined; dedupeKey?: string | undefined;
 }) {
   const userIds = [...new Set(input.userIds)];
   if (!userIds.length) return;

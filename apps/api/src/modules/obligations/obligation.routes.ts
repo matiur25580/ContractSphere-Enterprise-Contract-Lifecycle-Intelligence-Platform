@@ -25,7 +25,7 @@ const idParam = (req: Request, key: string) => {
   return value;
 };
 const renewalQuerySchema = z.object({ status: z.enum(["UPCOMING", "NOTICE_DUE", "RENEWAL_IN_PROGRESS", "RENEWED", "TERMINATED", "EXPIRED"]).optional(), page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) });
-const audit = (req: Request, action: string, resourceType: string, resourceId: string, summary: string) => recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action, resourceType, resourceId, summary, requestId: req.header("x-request-id") });
+const audit = (req: Request, action: string, resourceType: string, resourceId: string, summary: string) => recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action, resourceType, resourceId, summary, ...(req.header("x-request-id") ? { requestId: req.header("x-request-id")! } : {}) });
 
 obligationRouter.post("/", validateBody(createObligationSchema), asyncHandler(async (req, res) => {
   const obligation = await createObligation(req.auth!.tenantId, req.auth!.userId, req.auth!.role, req.body);
@@ -38,7 +38,7 @@ obligationRouter.get("/", validateQuery(listObligationsSchema), asyncHandler(asy
 }));
 obligationRouter.patch("/:obligationId", validateBody(updateObligationSchema), asyncHandler(async (req, res) => {
   const obligation = await updateObligation(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "obligationId"), req.body);
-  await audit(req, "OBLIGATION_UPDATED", "OBLIGATION", obligation.id, "Updated obligation status or details");
+  if (!obligation) throw new HttpError(404, "Obligation not found.", "OBLIGATION_NOT_FOUND");\n  await audit(req, "OBLIGATION_UPDATED", "OBLIGATION", obligation.id, "Updated obligation status or details");
   res.json({ success: true, data: { obligation } });
 }));
 obligationRouter.get("/renewals", validateQuery(renewalQuerySchema), asyncHandler(async (req, res) => {

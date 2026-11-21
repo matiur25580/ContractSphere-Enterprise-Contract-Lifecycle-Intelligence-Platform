@@ -16,7 +16,7 @@ export async function recordAuditEvent(input: {
 }
 
 export async function listAuditEvents(tenantId: string, query: {
-  resourceType?: string; action?: string; resourceId?: string; page: number; limit: number;
+  resourceType?: string | undefined; action?: string | undefined; resourceId?: string | undefined; page: number; limit: number;
 }) {
   const filter: Record<string, unknown> = { tenantId: oid(tenantId) };
   if (query.resourceType) filter.resourceType = query.resourceType;
