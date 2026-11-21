@@ -95,6 +95,15 @@ describe.skipIf(!uri)("workflow service — MongoDB integration", () => {
     expect((await Contract.findById(contract._id))?.status).toBe("DRAFT");
   });
 
+  it("prevents the contract submitter from being assigned as an approver", async () => {
+    const contract = await createContract(ownerId);
+    const definition = await createDefinition([ownerId], "ANY");
+    await expect(submitContractForApproval(tenantId.toString(), ownerId.toString(), "OWNER", contract.id, definition.id))
+      .rejects.toMatchObject({ statusCode: 403, code: "SELF_APPROVAL_NOT_ALLOWED" });
+    expect(await WorkflowInstance.countDocuments({ contractId: contract._id })).toBe(0);
+    expect((await Contract.findById(contract._id))?.status).toBe("DRAFT");
+  });
+
   it("does not expose another tenant's workflow instance to a decision request", async () => {
     const contract = await createContract(ownerId);
     const definition = await createDefinition([approverA], "ANY");
