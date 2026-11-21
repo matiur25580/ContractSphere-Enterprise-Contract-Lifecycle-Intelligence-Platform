@@ -190,7 +190,8 @@ The project uses a **TypeScript modular monolith**. Domain modules are separated
 - npm 10+
 - MongoDB 7+ (local or Atlas)
 - An S3-compatible private bucket for document upload, download and stored-document analysis
-- ClamAV daemon reachable by the API on TCP port 3310 for malware scanning (required for document uploads)\n- Poppler (`pdftoppm`) and Tesseract OCR with the English language data for scanned-PDF OCR (optional for text-based PDFs)
+- ClamAV daemon reachable by the API on TCP port 3310 for malware scanning (required for document uploads)
+- Poppler (`pdftoppm`) and Tesseract OCR with English language data for scanned-PDF OCR (optional for text-based PDFs)
 - Chromium only if generating the dashboard screenshot gallery
 
 ### Install and run
@@ -332,7 +333,8 @@ Contract search supports query, status, type, counterparty, pagination and sorti
 | POST | /contracts/:contractId/intelligence/analyze | Analyze pasted contract text |
 | POST | /contracts/:contractId/intelligence/documents/:fileId/analyze | Extract and analyze stored PDF/DOCX |
 | GET | /contracts/:contractId/intelligence | Read latest 20 analysis reports |
-| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/:contractId/intelligence/jobs/:jobId | Read authorized background-analysis job status |
+| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |
+| GET | /contracts/:contractId/intelligence/jobs/:jobId | Read authorized background-analysis job status |
 | POST | /contracts/:contractId/intelligence/compare | Compare two pasted texts or two stored document versions |
 | GET | /contracts/:contractId/intelligence/comparisons | Read latest 20 version comparisons |
 
@@ -397,11 +399,9 @@ These are pattern-based signals, not complete legal analysis. Clause wording, ju
 10. Workflow decisions use conditional state transitions to reduce duplicate decisions.
 
 ### Production hardening still required
-- Malware scanning, file-signature and archive-bomb checks before document processing.
-- OCR pipeline for scanned agreements, with page-level provenance.
+- Page-level OCR evidence provenance and multilingual OCR.
 - Shared rate-limit storage for horizontally scaled API instances.
-- Durable background jobs, retry/dead-letter handling and scheduled obligation/renewal reminders.
-- Email and push notification delivery with provider webhooks and delivery audit.
+- Scheduled obligation/renewal reminders and outbound email/push delivery with provider webhooks.
 - Database least-privilege roles, backups, restore drills, retention and disaster recovery.
 - Database-enforced audit immutability or tamper-evident/WORM audit storage.
 - Centralized secrets management, key rotation and credential monitoring.
@@ -513,14 +513,19 @@ The repository view brings agreement identity, counterparty, lifecycle status, v
 - [x] Audit events and in-app notifications
 - [x] Rules-based contract intelligence with source evidence
 - [x] PDF/DOCX extraction and optional provider-backed analysis
+- [x] Scanned-PDF OCR fallback (first 10 pages, English)
 - [x] Contract version comparison with clause and risk-change summaries
+- [x] Durable document jobs with retries and lease recovery
+- [x] Malware scanning and file-signature validation
+- [x] Tenant-scoped processing dashboard and job status API
+- [x] Liveness/readiness probes and production environment checks
 - [x] Playwright dashboard showcase capture for twelve screens
-- [ ] OCR and page-level evidence provenance
+- [ ] Page-level OCR evidence provenance and multilingual OCR
 - [ ] Semantic comparison and legally meaningful redline review
-- [ ] Durable jobs, reminders and outbound notification delivery
-- [ ] Malware scanning and deeper document validation
+- [ ] Scheduled reminders and outbound notification delivery
 - [ ] Database-enforced audit immutability and enterprise retention controls
-- [ ] End-to-end security, performance and disaster-recovery validation\n- [ ] Production readiness, dependency and infrastructure configuration review\n- [ ] Production readiness, dependency and infrastructure configuration review\n- [ ] Production readiness, dependency and infrastructure configuration review
+- [ ] End-to-end security, performance and disaster-recovery validation
+- [ ] Production readiness, dependency and infrastructure configuration review
 
 ---
 
