@@ -88,7 +88,7 @@ const UPLOAD_PROCESSING_LEASE_MS = 10 * 60 * 1000;
 async function getCompletedUploadResult(intent: {
   tenantId: Types.ObjectId; contractId: Types.ObjectId; objectKey: string;
   scanStatus?: string; scanResult?: string;
-}) {
+}, role: string) {
   if (intent.scanStatus === "INFECTED") {
     throw new HttpError(422, "The uploaded document was identified as malicious and moved to quarantine.", "MALWARE_DETECTED");
   }
@@ -101,7 +101,7 @@ async function getCompletedUploadResult(intent: {
   if (!job) {
     job = await enqueueDocumentAnalysis({
       tenantId: intent.tenantId.toString(), contractId: intent.contractId.toString(),
-      fileId: file.id, userId: file.uploadedBy.toString(), role: "MEMBER"
+      fileId: file.id, userId: file.uploadedBy.toString(), role
     });
   }
   return { file, job };
@@ -116,7 +116,7 @@ export async function completeDocumentUpload(tenantId: string, userId: string, u
   const alreadyCompleted = await UploadIntent.findOne({
     _id: uploadId, tenantId: tenant, userId: actor, completedAt: { $ne: null }
   }).lean();
-  if (alreadyCompleted) return getCompletedUploadResult(alreadyCompleted);
+  if (alreadyCompleted) return getCompletedUploadResult(alreadyCompleted, role);
 
   const intent = await UploadIntent.findOneAndUpdate(
     {
@@ -137,7 +137,7 @@ export async function completeDocumentUpload(tenantId: string, userId: string, u
 
   if (!intent) {
     const current = await UploadIntent.findOne({ _id: uploadId, tenantId: tenant, userId: actor }).lean();
-    if (current?.completedAt) return getCompletedUploadResult(current);
+    if (current?.completedAt) return getCompletedUploadResult(current, role);
     if (current && current.expiresAt > now) {
       throw new HttpError(409, "This upload is already being processed. Retry after the current completion attempt finishes.", "UPLOAD_COMPLETION_IN_PROGRESS");
     }
