@@ -6,7 +6,7 @@ import { User } from "../src/modules/users/user.model.js";
 import { WorkflowDefinition, WorkflowInstance } from "../src/modules/workflows/workflow.model.js";
 import { decideOnWorkflow, submitContractForApproval } from "../src/modules/workflows/workflow.service.js";
 
-const uri = process.env.MONGODB_URI?.replace(/\/[^/?]+(?=\\?|$)/, "/contractsphere_workflows");
+const uri = process.env.MONGODB_URI?.replace(/\/[^/?]+(\?.*)?$/, "/contractsphere_workflows$1");
 const newId = () => new Types.ObjectId();
 
 describe.skipIf(!uri)("workflow service — MongoDB integration", () => {
