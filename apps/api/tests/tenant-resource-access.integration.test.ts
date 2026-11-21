@@ -19,7 +19,7 @@ vi.mock("../src/modules/audit/audit.service.js", () => ({
 
 import { Contract } from "../src/modules/contracts/contract.model.js";
 import { ContractFile } from "../src/modules/contracts/contract-file.model.js";
-import { getContract, getDocumentDownloadUrl } from "../src/modules/contracts/contract.service.js";
+import { getContract, getDocumentDownloadUrl, updateContract } from "../src/modules/contracts/contract.service.js";
 import { DocumentProcessingJob } from "../src/modules/intelligence/document-job.model.js";
 import { getDocumentAnalysisJob, listRecentDocumentJobs } from "../src/modules/intelligence/document-job.service.js";
 import { User } from "../src/modules/users/user.model.js";
@@ -128,6 +128,24 @@ describe.skipIf(!uri)("tenant resource access — MongoDB integration", () => {
     expect(result.versions.map(version => version._id.toString())).toEqual([fileA.toString()]);
     await expect(getContract(tenantB.toString(), contractA.toString()))
       .rejects.toMatchObject({ statusCode: 404, code: "CONTRACT_NOT_FOUND" });
+  });
+
+  it("restricts member contract updates to their own contracts and prevents ownership reassignment", async () => {
+    const ownContract = await Contract.create({
+      _id: newId(), tenantId: tenantA, title: "Member-owned contract",
+      contractNumber: "A-" + newId().toString(), type: "NDA", status: "DRAFT",
+      counterparty: "Member Counterparty", ownerId: memberA, createdBy: memberA, updatedBy: memberA,
+      currency: "USD", tags: [], latestVersion: 0
+    });
+
+    const updated = await updateContract(tenantA.toString(), memberA.toString(), "MEMBER", ownContract.id, { title: "Updated by owner" });
+    expect(updated.title).toBe("Updated by owner");
+
+    await expect(updateContract(tenantA.toString(), memberA.toString(), "MEMBER", contractA.toString(), { title: "Unauthorized edit" }))
+      .rejects.toMatchObject({ statusCode: 404, code: "CONTRACT_NOT_FOUND" });
+
+    await expect(updateContract(tenantA.toString(), memberA.toString(), "MEMBER", ownContract.id, { ownerId: ownerA.toString() }))
+      .rejects.toMatchObject({ statusCode: 403, code: "FORBIDDEN" });
   });
 
   it("does not generate a download URL for a cross-tenant document identifier", async () => {
