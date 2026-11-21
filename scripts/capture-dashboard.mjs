@@ -77,23 +77,33 @@ async function main() {
   });
   await page.goto(baseUrl, { waitUntil:"networkidle" });
   await page.waitForSelector(".workspace-heading", { timeout:30000 });
-  await page.locator(`.intelligence-panel select option[value="${id}"]`).waitFor({ state:"attached", timeout:30000 });
-  const contractSelect = page.locator(".intelligence-panel select").first();
+  const contractSelect = page.getByLabel("Contract", { exact:true });
+  await contractSelect.waitFor({ state:"visible", timeout:30000 });
   await contractSelect.selectOption(id);
-  await contractSelect.dispatchEvent("input");
-  await contractSelect.dispatchEvent("change");
+  await page.waitForFunction(expectedId => {
+   const select = document.querySelector(".intelligence-panel form select");
+   return select instanceof HTMLSelectElement && select.value === expectedId;
+  }, id, { timeout:10000 });
+
   const source = "This Master Services Agreement is entered into by the parties. The parties agree to confidentiality obligations and shall protect personal data. This agreement is governed by the laws of England. The supplier shall maintain insurance and indemnify the customer for all claims. This agreement will automatically renew for successive one-year terms. The supplier's liability under this agreement shall be unlimited. The parties agree to payment terms and termination rights.";
-  const sourceTextarea = page.locator(".intelligence-panel form textarea").first();
+  const sourceTextarea = page.getByLabel("Paste contract text", { exact:true });
   await sourceTextarea.fill(source);
-  await sourceTextarea.dispatchEvent("input");
-  await sourceTextarea.dispatchEvent("change");
-  await page.waitForTimeout(250);
-  const selectedContract = await page.locator(".intelligence-panel select").first().inputValue();
-  const sourceLength = await page.locator(".intelligence-panel form textarea").first().inputValue().then(value => value.trim().length);
-  const submitDisabled = await page.locator(".intelligence-panel form button[type=submit]").first().isDisabled();
-  process.stdout.write(`Showcase debug: contract=${selectedContract}, sourceLength=${sourceLength}, submitDisabled=${submitDisabled}\\n`);
-  await page.waitForFunction(() => { const button = document.querySelector(".intelligence-panel form button[type=submit]"); return button instanceof HTMLButtonElement && !button.disabled; }, null, { timeout:10000 });
-  await page.locator(".intelligence-panel form button[type=submit]").first().click();
+  await page.waitForFunction(expectedLength => {
+   const textarea = document.querySelector(".intelligence-panel form textarea");
+   const button = document.querySelector(".intelligence-panel form button[type=submit]");
+   return textarea instanceof HTMLTextAreaElement &&
+    textarea.value.trim().length === expectedLength &&
+    button instanceof HTMLButtonElement && !button.disabled;
+  }, source.trim().length, { timeout:15000 }).catch(async error => {
+   const diagnostics = await page.locator(".intelligence-panel form").evaluate(form => ({
+    controls: Array.from(form.querySelectorAll("select, textarea, button")).map(control => ({
+     tag:control.tagName, value:"value" in control ? control.value : undefined,
+     disabled:"disabled" in control ? control.disabled : undefined
+    }))
+   }));
+   throw new Error(`Contract review form did not become ready: ${JSON.stringify(diagnostics)}. ${error.message}`);
+  });
+  await page.locator(".intelligence-panel form button[type=submit]").click();
   await page.waitForSelector(".intelligence-results");
   const compareForm = page.locator(".comparison-workspace form");
   await compareForm.locator("textarea").nth(0).fill(source.replace("The supplier's liability under this agreement shall be unlimited.", "The supplier's aggregate liability shall not exceed fees paid in the preceding twelve months."));
