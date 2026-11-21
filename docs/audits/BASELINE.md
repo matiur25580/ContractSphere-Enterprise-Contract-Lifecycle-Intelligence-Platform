@@ -205,3 +205,20 @@ This section records findings confirmed during the subsequent PR and source revi
 - F-06 workflow/contract non-atomic transition and F-09 worker lease/idempotency risks remain open as described above.
 
 **Scope note:** This is a remote source and GitHub Actions review. No local clean install, local build/test, replica-set-backed integration run, production cloud configuration review, penetration test, or deployment is claimed.
+
+
+## Verification update — MongoDB-backed workflow tests (2026-11-21)
+
+### CI infrastructure and test evidence
+
+- PR #17 provisions a MongoDB service in GitHub Actions and runs workflow service tests against an actual MongoDB database rather than only validating request schemas.
+- The integration suite covers: ALL-mode multi-approver progression; contract transition from DRAFT to IN_REVIEW to APPROVED; rejection returning the contract to DRAFT; MEMBER submission restrictions for contracts owned by another user; cross-tenant workflow-instance lookup rejection; and concurrent duplicate decisions by the same approver.
+- PR #17 verification run [44931551989](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44931551989) completed successfully, including dependency audit, typecheck, build, and API tests with the MongoDB service.
+- PR #17 merged to main as `e1cd8e42d1c3d7e7d03b6b8a420a9f2e4be0e7fd`.
+
+### Remaining workflow consistency risk
+
+- The integration tests verify normal approval/rejection paths and concurrent duplicate decisions. They do not simulate a database/network failure between the terminal WorkflowInstance write and the separate Contract update.
+- F-06 remains open: workflow and contract state transitions are still separate writes, and the Contract update result is not checked. A transaction or durable recoverable reconciliation design is still required to close this risk. MongoDB was provisioned as a standalone service for this test suite; transaction semantics have not been tested.
+- The CI job currently runs with a MongoDB service but the workflow service integration suite does not test document upload, storage scanning, worker lease takeover, or report idempotency.
+- No production-like cloud configuration, penetration test, production deployment, or full end-to-end operational test is claimed.
