@@ -192,7 +192,7 @@ Generation creates a tenant-scoped DRAFT contract and stores rendered text with 
 - [x] Initial obligations and renewal tracking with derived notice deadlines
 - [x] Vendor/counterparty directory, contract linkage, compliance expiry visibility, and human-reviewed risk assessments\n- [ ] Automated notifications and durable scheduled jobs
 - [x] Evidence-grounded contract clause extraction, deterministic risk flags, missing-term detection, and analysis history (rules-based baseline; no external LLM integration yet)
-- [ ] Audit, analytics, exports, integrations, and production hardening
+- [x] PDF/DOCX text extraction and optional provider-backed AI analysis with evidence grounding\n- [ ] Semantic contract comparison, OCR, durable background processing, and production hardening
 
 ## Development commands
 
@@ -240,7 +240,10 @@ All routes require an access token and are scoped to the authenticated tenant. C
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| POST | `/contracts/:contractId/intelligence/analyze` | Analyze pasted agreement text (100–30,000 characters) |
+| POST | `/contracts/:contractId/intelligence/analyze` | Analyze pasted text with RULE_BASED or AI_COMPATIBLE engine |
+| POST | `/contracts/:contractId/intelligence/documents/:fileId/analyze` | Extract and analyze a private PDF/DOCX version |
 | GET | `/contracts/:contractId/intelligence` | List the latest 20 analysis reports |
 
-The current engine is an explainable deterministic baseline, not a generative AI model. It detects common clause categories, selected risk patterns and potentially missing terms. Findings include confidence indicators and source character offsets/excerpts where evidence exists. Reports retain a SHA-256 source fingerprint and excerpts, not the complete submitted contract text. Uploaded PDF/DOCX extraction and external LLM integration are not yet included. False negatives/positives are possible; findings are not legal advice and require qualified human review.
+The platform supports a deterministic rules-based engine and an optional OpenAI-compatible provider configured by AI_API_KEY, AI_BASE_URL, and AI_MODEL. AI analysis is opt-in per request; when enabled, the source contract text is sent to that configured provider. Review its retention and processing terms before enabling it. Provider responses are schema-validated and every AI finding is retained only when its quoted evidence exactly matches the source text. The API does not expose provider credentials to the browser, and the model receives no tools or authority to approve/sign contracts. Reports store a SHA-256 source fingerprint and evidence excerpts, not the complete source text.
+
+PDF and DOCX extraction is supported for private stored contract versions up to 10 MB, with a 30,000-character extracted-text limit. Encrypted, damaged, image-only/scanned PDFs and OCR are not supported. Only authorized contract owners/creators and OWNER/ADMIN users can analyze or retrieve reports. False positives/negatives are possible; findings are not legal advice and require qualified human review.

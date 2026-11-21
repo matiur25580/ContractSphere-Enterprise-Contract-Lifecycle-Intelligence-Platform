@@ -10,7 +10,6 @@ const client = configured ? new S3Client({
   forcePathStyle: Boolean(env.S3_ENDPOINT),
   credentials: { accessKeyId: env.S3_ACCESS_KEY_ID!, secretAccessKey: env.S3_SECRET_ACCESS_KEY! }
 }) : null;
-
 function storage() {
   if (!client || !env.S3_BUCKET) throw new HttpError(503, "Document storage is not configured. Set the S3 environment variables.", "STORAGE_NOT_CONFIGURED");
   return { client, bucket: env.S3_BUCKET };
@@ -28,6 +27,14 @@ export async function inspectStoredObject(objectKey: string) {
   } catch {
     throw new HttpError(400, "The uploaded document could not be verified in private storage.", "UPLOAD_NOT_FOUND");
   }
+}
+export async function readStoredObject(objectKey: string, maxBytes: number) {
+  const { client, bucket } = storage();
+  const metadata = await inspectStoredObject(objectKey);
+  if (metadata.sizeBytes < 1 || metadata.sizeBytes > maxBytes) throw new HttpError(413, "The document exceeds the 10 MB analysis limit.", "DOCUMENT_TOO_LARGE");
+  const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: objectKey }));
+  if (!result.Body) throw new HttpError(422, "The stored document has no readable content.", "DOCUMENT_EMPTY");
+  return Buffer.from(await result.Body.transformToByteArray());
 }
 export async function createDownloadUrl(objectKey: string) {
   const { client, bucket } = storage();

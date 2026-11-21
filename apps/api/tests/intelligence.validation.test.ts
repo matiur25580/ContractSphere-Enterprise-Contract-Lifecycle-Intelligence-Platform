@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { analyzeContractText } from "../src/modules/intelligence/intelligence.service.js";
+import { extractDocumentText } from "../src/modules/intelligence/document-extractor.js";
+import { groundQuote } from "../src/modules/intelligence/ai-provider.service.js";
 describe("evidence-grounded contract intelligence", () => {
  it("extracts clause categories with source offsets and excerpts", () => {
   const source = "The parties agree to confidentiality obligations. This agreement is governed by the laws of England. The supplier will indemnify the customer for all claims. Liability is unlimited.";
@@ -22,5 +24,14 @@ describe("evidence-grounded contract intelligence", () => {
  it("identifies an automatic renewal without clear notice language", () => {
   const result = analyzeContractText("This agreement will automatically renew for successive one-year terms.");
   expect(result.findings.some(item => item.key === "renewal_notice_unclear")).toBe(true);
+ });
+ it("grounds AI evidence only when an exact quote exists in source text", () => {
+  const source = "The supplier shall maintain confidentiality and protect all personal data.";
+  const quote = groundQuote(source, "maintain confidentiality");
+  expect(quote?.start).toBe(source.indexOf("maintain confidentiality"));
+  expect(groundQuote(source, "the supplier is liable for all losses")).toBeNull();
+ });
+ it("rejects unsupported document formats without parsing", async () => {
+  await expect(extractDocumentText(Buffer.from("plain text"), "text/plain")).rejects.toMatchObject({ code: "UNSUPPORTED_DOCUMENT_TYPE" });
  });
 });

@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import { Types } from "mongoose";
 import { HttpError } from "../../common/http-error.js";
 import { Contract } from "../contracts/contract.model.js";
+import { ContractFile } from "../contracts/contract-file.model.js";
+import { readStoredObject } from "../contracts/storage.service.js";
+import { extractDocumentText, MAX_DOCUMENT_BYTES } from "./document-extractor.js";
+import { analyzeWithConfiguredAI } from "./ai-provider.service.js";
 import { ContractIntelligenceReport } from "./intelligence.model.js";
 
 export type FindingSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -57,7 +61,7 @@ export function analyzeContractText(sourceText: string) {
   };
 }
 const oid = (value: string) => new Types.ObjectId(value);
-async function authorizedContract(tenantId: string, userId: string, role: string, contractId: string) {
+export async function authorizedContract(tenantId: string, userId: string, role: string, contractId: string) {
   const contract = await Contract.findOne({ _id: contractId, tenantId: oid(tenantId) }).select("_id ownerId createdBy").lean();
   if (!contract) throw new HttpError(404, "Contract not found.", "CONTRACT_NOT_FOUND");
   if (!["OWNER", "ADMIN"].includes(role) && contract.ownerId.toString() !== userId && contract.createdBy.toString() !== userId) throw new HttpError(403, "You do not have access to analyze this contract.", "FORBIDDEN");
@@ -72,6 +76,16 @@ export async function analyzeContract(tenantId: string, userId: string, role: st
     sourceFingerprint, sourceLength: sourceText.length, ...result
   });
   return report;
+}
+export async function analyzeStoredDocument(tenantId: string, userId: string, role: string, contractId: string, fileId: string, engine: "RULE_BASED" | "AI_COMPATIBLE" = "RULE_BASED") {
+  const contract = await authorizedContract(tenantId, userId, role, contractId);
+  const file = await ContractFile.findOne({ _id: fileId, tenantId: oid(tenantId), contractId: contract._id }).lean();
+  if (!file) throw new HttpError(404, "Document version not found for this contract.", "DOCUMENT_NOT_FOUND");
+  if (!["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"].includes(file.mimeType)) throw new HttpError(415, "Only PDF and DOCX documents can be analyzed.", "UNSUPPORTED_DOCUMENT_TYPE");
+  if (file.sizeBytes > MAX_DOCUMENT_BYTES) throw new HttpError(413, "The document exceeds the 10 MB analysis limit.", "DOCUMENT_TOO_LARGE");
+  const buffer = await readStoredObject(file.objectKey, MAX_DOCUMENT_BYTES);
+  const sourceText = await extractDocumentText(buffer, file.mimeType);
+  return analyzeContract(tenantId, userId, role, contractId, sourceText, file.originalName, engine);
 }
 export async function listContractAnalyses(tenantId: string, userId: string, role: string, contractId: string) {
   const contract = await authorizedContract(tenantId, userId, role, contractId);

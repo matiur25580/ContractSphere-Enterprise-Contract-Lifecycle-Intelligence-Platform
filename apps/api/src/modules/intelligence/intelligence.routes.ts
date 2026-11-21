@@ -4,29 +4,41 @@ import { HttpError } from "../../common/http-error.js";
 import { asyncHandler } from "../../common/async-handler.js";
 import { requireAuth } from "../auth/auth.middleware.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
-import { analyzeContract, listContractAnalyses } from "./intelligence.service.js";
+import { analyzeContract, analyzeStoredDocument, listContractAnalyses } from "./intelligence.service.js";
 export const intelligenceRouter = Router();
 intelligenceRouter.use(requireAuth);
+const engineSchema = z.enum(["RULE_BASED", "AI_COMPATIBLE"]).default("RULE_BASED");
 const analysisSchema = z.object({
  sourceText: z.string().trim().min(100).max(30000),
- sourceLabel: z.string().trim().min(1).max(120).default("Pasted contract text")
+ sourceLabel: z.string().trim().min(1).max(120).default("Pasted contract text"),
+ engine: engineSchema
 }).strict();
-const validate: RequestHandler = (req, _res, next) => {
- const parsed = analysisSchema.safeParse(req.body);
- if (!parsed.success) return next(new HttpError(400, "Provide contract text between 100 and 30,000 characters.", "VALIDATION_ERROR"));
+const documentSchema = z.object({ engine: engineSchema }).strict();
+const validate = (schema: z.ZodTypeAny): RequestHandler => (req, _res, next) => {
+ const parsed = schema.safeParse(req.body);
+ if (!parsed.success) return next(new HttpError(400, "The analysis request is invalid.", "VALIDATION_ERROR"));
  req.body = parsed.data; next();
 };
-const idParam = (req: Parameters<RequestHandler>[0]) => {
- const id = req.params.contractId;
- if (typeof id !== "string" || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, "Invalid contract identifier.", "INVALID_ID");
+const idParam = (req: Parameters<RequestHandler>[0], key: string) => {
+ const id = req.params[key];
+ if (typeof id !== "string" || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, "Invalid resource identifier.", "INVALID_ID");
  return id;
 };
-intelligenceRouter.post("/:contractId/intelligence/analyze", validate, asyncHandler(async (req, res) => {
- const report = await analyzeContract(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req), req.body.sourceText, req.body.sourceLabel);
- await recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action: "CONTRACT_INTELLIGENCE_ANALYZED", resourceType: "CONTRACT", resourceId: idParam(req), summary: "Created evidence-grounded contract intelligence report", metadata: { engine: report.engine, findingCount: report.findings.length } });
+const audit = (req: Parameters<RequestHandler>[0], report: { engine: string; findings: unknown[] }, contractId: string, source: string) =>
+ recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action: "CONTRACT_INTELLIGENCE_ANALYZED", resourceType: "CONTRACT", resourceId: contractId, summary: "Created contract intelligence report", metadata: { engine: report.engine, findingCount: report.findings.length, source } });
+intelligenceRouter.post("/:contractId/intelligence/analyze", validate(analysisSchema), asyncHandler(async (req, res) => {
+ const contractId = idParam(req, "contractId");
+ const report = await analyzeContract(req.auth!.tenantId, req.auth!.userId, req.auth!.role, contractId, req.body.sourceText, req.body.sourceLabel, req.body.engine);
+ await audit(req, report, contractId, "PASTED_TEXT");
+ res.status(201).json({ success: true, data: { report } });
+}));
+intelligenceRouter.post("/:contractId/intelligence/documents/:fileId/analyze", validate(documentSchema), asyncHandler(async (req, res) => {
+ const contractId = idParam(req, "contractId");
+ const report = await analyzeStoredDocument(req.auth!.tenantId, req.auth!.userId, req.auth!.role, contractId, idParam(req, "fileId"), req.body.engine);
+ await audit(req, report, contractId, "STORED_DOCUMENT");
  res.status(201).json({ success: true, data: { report } });
 }));
 intelligenceRouter.get("/:contractId/intelligence", asyncHandler(async (req, res) => {
- const reports = await listContractAnalyses(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req));
+ const reports = await listContractAnalyses(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "contractId"));
  res.json({ success: true, data: { reports } });
 }));

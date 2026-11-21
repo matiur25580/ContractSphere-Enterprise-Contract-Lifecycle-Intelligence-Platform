@@ -15,7 +15,10 @@ const schema = z.object({
   S3_REGION: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
-  S3_ENDPOINT: z.string().url().optional()
+  S3_ENDPOINT: z.string().url().optional(),
+  AI_API_KEY: z.string().min(1).optional(),
+  AI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
+  AI_MODEL: z.string().trim().min(1).max(120).default("gpt-4.1-mini")
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === "production" && !process.env.JWT_ACCESS_SECRET) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["JWT_ACCESS_SECRET"], message: "JWT_ACCESS_SECRET is required in production." });
@@ -24,8 +27,10 @@ const schema = z.object({
   if (storageValues.some(Boolean) && storageValues.some(item => !item)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["S3_BUCKET"], message: "S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY must be configured together." });
   }
+  if (value.NODE_ENV === "production" && new URL(value.AI_BASE_URL).protocol !== "https:") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["AI_BASE_URL"], message: "AI_BASE_URL must use HTTPS in production." });
+  }
 });
-
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
   console.error("Invalid environment configuration:", parsed.error.flatten().fieldErrors);
