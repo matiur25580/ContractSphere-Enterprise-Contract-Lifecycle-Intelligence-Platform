@@ -12,19 +12,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      mongodb:
-        image: mongo:7.0
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     env:
       NODE_ENV: test
-      MONGODB_URI: mongodb://127.0.0.1:27017/contractsphere_ci
+      MONGODB_URI: mongodb://127.0.0.1:27017/contractsphere_ci?replicaSet=rs0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +22,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Start MongoDB replica set
+        run: |
+          docker run --detach --name contractsphere-mongodb --publish 27017:27017 mongo:7.0 mongod --replSet rs0 --bind_ip_all
+          for attempt in $(seq 1 30); do
+            if docker exec contractsphere-mongodb mongosh --quiet --eval 'db.adminCommand("ping").ok' >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker exec contractsphere-mongodb mongosh --quiet --eval 'try { rs.status() } catch (error) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "127.0.0.1:27017"}]}) }'
+          for attempt in $(seq 1 30); do
+            if docker exec contractsphere-mongodb mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then exit 0; fi
+            sleep 2
+          done
+          echo "MongoDB replica set did not become primary"
+          exit 1
       - name: Install dependencies
         run: npm install
       - name: Production dependency security audit
