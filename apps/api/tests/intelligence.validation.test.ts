@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { analyzeContractText } from "../src/modules/intelligence/intelligence.service.js";
 import { extractDocumentText } from "../src/modules/intelligence/document-extractor.js";
 import { groundQuote } from "../src/modules/intelligence/ai-provider.service.js";
+import { compareContractSources } from "../src/modules/intelligence/comparison.service.js";
 describe("evidence-grounded contract intelligence", () => {
  it("extracts clause categories with source offsets and excerpts", () => {
   const source = "The parties agree to confidentiality obligations. This agreement is governed by the laws of England. The supplier will indemnify the customer for all claims. Liability is unlimited.";
@@ -33,5 +34,14 @@ describe("evidence-grounded contract intelligence", () => {
  });
  it("rejects unsupported document formats without parsing", async () => {
   await expect(extractDocumentText(Buffer.from("plain text"), "text/plain")).rejects.toMatchObject({ code: "UNSUPPORTED_DOCUMENT_TYPE" });
+ });
+ it("compares two contract texts and identifies added clauses and changed risk signals", async () => {
+  const before = "This agreement is governed by the laws of England. The parties agree to confidentiality obligations. The supplier shall maintain confidentiality and protect all personal data under this agreement.";
+  const after = before + " Liability is unlimited. This agreement will automatically renew for successive one-year terms.";
+  const { compareTextSources } = await import("../src/modules/intelligence/comparison.service.js");
+  const result = compareTextSources(before, after);
+  expect(result.additions.some(item => item.includes("Liability is unlimited"))).toBe(true);
+  expect(result.findingChanges.some(item => item.key === "uncapped_liability" && item.change === "NEW")).toBe(true);
+  expect(result.similarityScore).toBeLessThan(100);
  });
 });
