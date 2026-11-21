@@ -25,5 +25,5 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
-      - name: Authentication validation tests
+      - name: API validation tests
         run: npm run test --workspace @contractsphere/api

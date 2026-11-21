@@ -4,7 +4,7 @@
 
 ContractSphere is a multi-tenant contract lifecycle management (CLM) platform for creating, reviewing, approving, executing, monitoring, and analyzing business agreements.
 
-> Status: foundation and authentication milestone in progress. Core capabilities are being delivered incrementally.
+> Status: authentication and contract repository milestones implemented. Workflow automation, intelligence, and production hardening are next.
 
 ## Product vision
 
