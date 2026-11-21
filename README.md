@@ -41,7 +41,8 @@ Every agreement should have an accountable owner, a traceable document history, 
 - Filter and paginate the organization's agreement inventory.
 - Link contracts to active vendor profiles.
 - Upload versioned PDF and DOCX documents using short-lived, server-generated S3-compatible upload URLs.
-- Verify uploaded object metadata before registering a version.
+- Verify uploaded object metadata, PDF/DOCX file signatures and ClamAV malware scan results before registering a version.
+- Quarantine infected or malformed uploads in a private quarantine prefix and record a tenant audit event; block registration if the scanner is unavailable.
 - Generate short-lived download URLs for authorized users.
 - Store document bytes in private object storage and version metadata in MongoDB.
 
@@ -132,6 +133,7 @@ Every agreement should have an accountable owner, a traceable document history, 
 | Authentication | bcrypt, JWT access tokens, rotating opaque refresh sessions |
 | Document storage | AWS SDK v3, private S3-compatible object storage |
 | Document parsing | pdf-parse, Mammoth (DOCX) |
+| Upload security | ClamAV daemon (INSTREAM protocol), file-signature validation, private S3 quarantine |
 | AI integration | Server-side OpenAI-compatible Chat Completions adapter |
 | Testing | Vitest, TypeScript type checking |
 | Browser showcase | Playwright Chromium |
@@ -185,6 +187,7 @@ The project uses a **TypeScript modular monolith**. Domain modules are separated
 - npm 10+
 - MongoDB 7+ (local or Atlas)
 - An S3-compatible private bucket for document upload, download and stored-document analysis
+- ClamAV daemon reachable by the API on TCP port 3310 for malware scanning (required for document uploads)
 - Chromium only if generating the dashboard screenshot gallery
 
 ### Install and run
@@ -202,7 +205,7 @@ Configure the environment, then start both applications:
 - API: http://localhost:4000
 - Health endpoint: http://localhost:4000/api/v1/health
 
-MongoDB must be reachable. Document workflows additionally require valid private object-storage configuration.
+MongoDB must be reachable. Document workflows additionally require valid private object-storage configuration and a reachable ClamAV daemon. For local development, start ClamAV separately (for example, with the official `clamav/clamav` container) and set `CLAMAV_HOST` to the address reachable from the API process. Allow the daemon to finish loading its virus database before testing uploads. Upload completion fails closed when ClamAV is missing, unreachable, times out or returns an indeterminate result.
 
 ### Environment variables
 
@@ -223,6 +226,9 @@ The complete template is maintained in apps/api/.env.example.
 | S3_ACCESS_KEY_ID | Documents | Server-side storage credential |
 | S3_SECRET_ACCESS_KEY | Documents | Server-side storage credential |
 | S3_ENDPOINT | Optional | S3-compatible endpoint, e.g. MinIO |
+| CLAMAV_HOST | Documents | Hostname/IP of the ClamAV daemon; required in production |
+| CLAMAV_PORT | No | ClamAV TCP port (default 3310) |
+| CLAMAV_TIMEOUT_MS | No | Per-scan timeout in milliseconds (default 30000) |
 | AI_API_KEY | Optional | Server-side AI provider credential |
 | AI_BASE_URL | Optional | OpenAI-compatible API base URL |
 | AI_MODEL | Optional | Provider model identifier |
@@ -267,7 +273,7 @@ Registration requires organization name/slug, user name/email and a password of 
 | POST | /contracts/uploads/:uploadId/complete | Verify and register uploaded version |
 | GET | /contracts/:contractId/versions/:fileId/download | Create short-lived download URL |
 
-Contract search supports query, status, type, counterparty, pagination and sorting. Upload requests accept PDF/DOCX and are limited to 25 MiB by the upload workflow. The intelligence extractor applies a stricter 10 MiB limit.
+Contract search supports query, status, type, counterparty, pagination and sorting. Upload requests accept PDF/DOCX and are limited to 25 MiB by the upload workflow. Completion checks the file signature, scans the bytes through ClamAV INSTREAM, and registers only a clean result. Infected files and files with invalid signatures are moved to the private `quarantine/` prefix and generate audit events. If the scanner is unavailable or returns an error, the file is not registered. The intelligence extractor applies a stricter 10 MiB limit.
 
 ### Approval workflows
 
