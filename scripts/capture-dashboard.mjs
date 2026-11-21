@@ -76,6 +76,7 @@ async function main() {
    let data = {};
    if (path === "/auth/refresh") data = { accessToken: "showcase-access-token", user: { id:userId,name:"Avery Morgan",email:"avery@example.test",role:"OWNER",organization:{id:"64a000000000000000000002",name:"Northstar Legal Operations",slug:"northstar-legal"} } };
    else if (path === "/contracts") data = { items:contracts,pagination:{page:1,limit:50,total:3,pages:1} };
+   else if (path === "/contracts/intelligence/jobs") data = { jobs:[], summary:{ queued:0, processing:0, succeeded:0, failed:0 } };
    else if (path === "/workflows/definitions") data = { definitions:[{_id:"654000000000000000000001",name:"Enterprise contract governance",stages:[{name:"Legal review",approvalMode:"ALL",approverUserIds:[userId]},{name:"Finance & risk",approvalMode:"ANY",approverUserIds:[userId]}]}] };
    else if (path === "/workflows/tasks/mine") data = { tasks:[{_id:"655000000000000000000001",definitionName:"Enterprise contract governance",currentStage:{name:"Legal review",approvalMode:"ALL",approverUserIds:[userId]},contract:{title:contracts[1].title,contractNumber:contracts[1].contractNumber,counterparty:contracts[1].counterparty}}] };
    else if (path === "/obligations") data = { items:obligations };
