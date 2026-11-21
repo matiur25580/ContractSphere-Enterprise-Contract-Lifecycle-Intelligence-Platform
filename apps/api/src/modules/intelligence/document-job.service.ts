@@ -84,10 +84,17 @@ async function claimJob() {
 async function processOne() {
   const job = await claimJob();
   if (!job) return;
+  const heartbeat = setInterval(() => {
+    void DocumentProcessingJob.updateOne(
+      { _id: job._id, status: "PROCESSING", lockedBy: workerId },
+      { $set: { lockedAt: new Date() } }
+    ).catch(error => console.error("Document processing lease heartbeat failed:", error));
+  }, Math.floor(LEASE_MS / 3));
+  heartbeat.unref();
   try {
     const report = await analyzeStoredDocument(
       job.tenantId.toString(), job.requestedBy.toString(), job.role,
-      job.contractId.toString(), job.fileId.toString(), job.engine
+      job.contractId.toString(), job.fileId.toString(), job.engine, job._id.toString()
     );
     await DocumentProcessingJob.updateOne(
       { _id: job._id, status: "PROCESSING", lockedBy: workerId },
@@ -110,6 +117,8 @@ async function processOne() {
         $unset: { lockedAt: 1, lockedBy: 1 }
       }
     );
+  } finally {
+    clearInterval(heartbeat);
   }
 }
 
