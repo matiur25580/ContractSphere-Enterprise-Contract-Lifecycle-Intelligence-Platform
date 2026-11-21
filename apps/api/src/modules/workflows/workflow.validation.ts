@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { APPROVAL_MODES } from "./workflow.model.js";
 
-const objectId = z.string().regex(/^[a-f\\d]{24}$/i, "A valid user or workflow ID is required.");
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, "A valid user or workflow ID is required.");
 const stageSchema = z.object({
   name: z.string().trim().min(2).max(80),
   approvalMode: z.enum(APPROVAL_MODES),

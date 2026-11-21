@@ -17,7 +17,7 @@ const validate = (schema: z.ZodTypeAny): RequestHandler => (req, _res, next) => 
 };
 const idParam = (req: Request, key: string) => {
   const value = req.params[key];
-  if (typeof value !== "string" || !/^[a-f\\d]{24}$/i.test(value)) throw new HttpError(400, "Invalid resource identifier.", "INVALID_ID");
+  if (typeof value !== "string" || !/^[a-f\d]{24}$/i.test(value)) throw new HttpError(400, "Invalid resource identifier.", "INVALID_ID");
   return value;
 };
 
