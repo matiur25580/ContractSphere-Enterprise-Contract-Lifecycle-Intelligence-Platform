@@ -70,7 +70,7 @@ export async function login(input: { organizationSlug: string; email: string; pa
 export async function rotateRefreshToken(token: string) {
   const sessionHash = hashToken(token);
   const dbSession = await mongoose.startSession();
-  let result: Awaited<ReturnType<typeof createRefreshSession>> & { accessToken: string; user: ReturnType<typeof publicUser> } | undefined;
+  let result: { accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: ReturnType<typeof publicUser> } | undefined;
   let failure: "INVALID_REFRESH_TOKEN" | "ACCOUNT_INACTIVE" | undefined;
   try {
     await dbSession.withTransaction(async () => {
@@ -113,8 +113,9 @@ export async function rotateRefreshToken(token: string) {
 
       const refresh = await createRefreshSession(user.id, tenant.id, familyId, dbSession);
       result = {
-        ...refresh,
         accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }),
+        refreshToken: refresh.token,
+        refreshExpiresAt: refresh.expiresAt,
         user: publicUser(user, tenant)
       };
     });
