@@ -16,6 +16,8 @@ interface ContractSummary {
   updatedAt: string;
 }
 interface ContractList { items: ContractSummary[]; pagination: { page: number; limit: number; total: number; pages: number }; }
+interface WorkflowDefinition { _id: string; name: string; stages: Array<{ name: string; approvalMode: 'ALL' | 'ANY'; approverUserIds: string[] }>; }
+interface ApprovalTask { _id: string; definitionName: string; currentStage: { name: string; approvalMode: string; approverUserIds: string[] }; contract: { title: string; contractNumber: string; counterparty: string } | null; }
 const auth = useAuthStore();
 const mode = ref<"login" | "register">("login");
 const errorMessage = ref("");
@@ -25,6 +27,11 @@ const creatingContract = ref(false);
 const contracts = ref<ContractSummary[]>([]);
 const search = ref("");
 const statusFilter = ref("");
+const workflowDefinitions = ref<WorkflowDefinition[]>([]);
+const approvalTasks = ref<ApprovalTask[]>([]);
+const workflowForm = reactive({ name: 'Standard contract review', approverUserIds: '' });
+const creatingWorkflow = ref(false);
+const selectedWorkflowId = ref('');
 const form = reactive({ organizationName: "", organizationSlug: "", name: "", email: "", password: "" });
 const contractForm = reactive({ title: "", contractNumber: "", type: "MSA", counterparty: "", currency: "USD", contractValue: "" });
 
@@ -36,6 +43,19 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const result = await response.json() as { success: boolean; data?: T; error?: { message?: string } };
   if (!response.ok || !result.success || result.data === undefined) throw new Error(result.error?.message ?? "The request could not be completed.");
   return result.data;
+}
+
+async function loadWorkflowData() {
+  if (!auth.accessToken) return;
+  try {
+    const [definitions, tasks] = await Promise.all([
+      api<{ definitions: WorkflowDefinition[] }>('/workflows/definitions'),
+      api<{ tasks: ApprovalTask[] }>('/workflows/tasks/mine')
+    ]);
+    workflowDefinitions.value = definitions.definitions;
+    approvalTasks.value = tasks.tasks;
+    if (!selectedWorkflowId.value && workflowDefinitions.value.length) selectedWorkflowId.value = workflowDefinitions.value[0]._id;
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'Could not load approval workflows.'; }
 }
 
 async function loadContracts() {
@@ -56,7 +76,10 @@ async function loadContracts() {
 
 onMounted(async () => {
   await auth.restore();
-  if (auth.user) await loadContracts();
+  if (auth.user) {
+    if (!workflowForm.approverUserIds) workflowForm.approverUserIds = auth.user.id;
+    await Promise.all([loadContracts(), loadWorkflowData()]);
+  }
 });
 
 async function submitAuth() {
@@ -91,6 +114,35 @@ async function createContract() {
   } finally {
     creatingContract.value = false;
   }
+}
+
+async function createWorkflow() {
+  errorMessage.value = ''; creatingWorkflow.value = true;
+  try {
+    const approverUserIds = workflowForm.approverUserIds.split(',').map(value => value.trim()).filter(Boolean);
+    await api('/workflows/definitions', { method: 'POST', body: JSON.stringify({ name: workflowForm.name, stages: [{ name: 'Approval', approvalMode: 'ALL', approverUserIds }] }) });
+    successMessage.value = 'Approval workflow created.'; await loadWorkflowData();
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'Could not create workflow.'; }
+  finally { creatingWorkflow.value = false; }
+}
+
+async function submitForApproval(contract: ContractSummary) {
+  if (!selectedWorkflowId.value) { errorMessage.value = 'Create or select an approval workflow first.'; return; }
+  errorMessage.value = '';
+  try {
+    await api(`/workflows/contracts/${contract._id}/submit`, { method: 'POST', body: JSON.stringify({ workflowDefinitionId: selectedWorkflowId.value }) });
+    successMessage.value = `${contract.contractNumber} submitted for approval.`;
+    await Promise.all([loadContracts(), loadWorkflowData()]);
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'Could not submit contract.'; }
+}
+
+async function decide(task: ApprovalTask, decision: 'APPROVE' | 'REJECT') {
+  errorMessage.value = '';
+  try {
+    await api(`/workflows/instances/${task._id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) });
+    successMessage.value = decision === 'APPROVE' ? 'Approval decision recorded.' : 'Contract rejected and returned to draft.';
+    await Promise.all([loadContracts(), loadWorkflowData()]);
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'Could not record the decision.'; }
 }
 
 async function uploadDocument(contractId: string, event: Event) {
@@ -175,6 +227,35 @@ async function signOut() {
       <div v-if="errorMessage" class="error-message global-message" role="alert">{{ errorMessage }}</div>
       <div v-if="successMessage" class="success-message global-message" role="status">{{ successMessage }}</div>
 
+      <section class="workflow-grid">
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">WORKFLOW DESIGN</span><h2>Approval routes</h2></div><span class="panel-number">02</span></div>
+          <div v-if="auth.user.role === 'OWNER' || auth.user.role === 'ADMIN'">
+            <form @submit.prevent="createWorkflow">
+              <label>Workflow name<input v-model="workflowForm.name" required minlength="3" maxlength="120" placeholder="Standard contract review"/></label>
+              <label>Approver user IDs<input v-model="workflowForm.approverUserIds" required placeholder="Comma-separated MongoDB user IDs"/></label>
+              <p class="field-hint">For a first test, use your own user ID. The API supports multiple sequential stages and ALL/ANY approval.</p>
+              <button class="primary-button" type="submit" :disabled="creatingWorkflow">{{ creatingWorkflow ? "Creating…" : "Create one-stage workflow" }}</button>
+            </form>
+          </div>
+          <div class="definition-list" v-if="workflowDefinitions.length">
+            <label>Workflow for submission<select v-model="selectedWorkflowId"><option v-for="definition in workflowDefinitions" :key="definition._id" :value="definition._id">{{ definition.name }} · {{ definition.stages.length }} stages</option></select></label>
+            <div v-for="definition in workflowDefinitions" :key="definition._id" class="definition-row"><strong>{{ definition.name }}</strong><small>{{ definition.stages.map(stage => stage.name + ' (' + stage.approvalMode + ')').join(' → ') }}</small></div>
+          </div>
+          <p v-else class="panel-note">No approval workflow has been configured yet.</p>
+        </div>
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">MY WORK QUEUE</span><h2>Pending approvals <span class="count-chip">{{ approvalTasks.length }}</span></h2></div><button class="refresh-button" @click="loadWorkflowData">↻ Refresh</button></div>
+          <div v-if="approvalTasks.length" class="task-list">
+            <article v-for="task in approvalTasks" :key="task._id" class="task-row">
+              <div class="task-copy"><strong>{{ task.contract?.title ?? 'Contract review' }}</strong><small>{{ task.contract?.contractNumber }} · {{ task.contract?.counterparty }}</small><small>{{ task.definitionName }} / {{ task.currentStage.name }} · {{ task.currentStage.approvalMode }} approval</small></div>
+              <div class="task-actions"><button class="approve-button" @click="decide(task, 'APPROVE')">Approve</button><button class="reject-button" @click="decide(task, 'REJECT')">Reject</button></div>
+            </article>
+          </div>
+          <div v-else class="empty-state compact-empty">No approvals are currently assigned to you.</div>
+        </div>
+      </section>
+
       <div class="repository-layout">
         <section class="panel create-panel">
           <div class="panel-heading"><div><span class="eyebrow">NEW RECORD</span><h2>Add a contract</h2></div><span class="panel-number">01</span></div>
@@ -216,6 +297,7 @@ async function signOut() {
               </div>
               <div class="contract-actions">
                 <label class="upload-action" :for="'upload-' + contract._id">Upload version<input :id="'upload-' + contract._id" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" @change="uploadDocument(contract._id, $event)"/></label>
+                <button v-if="contract.status === 'DRAFT' && workflowDefinitions.length" class="submit-action" @click="submitForApproval(contract)">Submit for approval</button>
                 <button v-if="contract.latestDocumentId" class="download-action" @click="downloadLatest(contract)">Download</button>
               </div>
             </article>

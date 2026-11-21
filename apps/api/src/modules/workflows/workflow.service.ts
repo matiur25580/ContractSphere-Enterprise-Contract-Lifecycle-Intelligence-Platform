@@ -126,6 +126,7 @@ export async function decideOnWorkflow(tenantId: string, userId: string, instanc
   if (!recorded) throw new HttpError(409, "This approval stage has already changed or your decision was already recorded.", "WORKFLOW_STATE_CONFLICT");
 
   const latestStage = recorded.stages[stageIndex];
+  if (!latestStage) throw new HttpError(409, "The approval stage could not be found. Refresh your task list.", "WORKFLOW_STATE_CONFLICT");
   const approvals = latestStage.decisions.filter(item => item.decision === "APPROVE").length;
   const required = latestStage.approvalMode === "ANY" ? 1 : latestStage.approverUserIds.length;
   if (approvals < required) return recorded;
