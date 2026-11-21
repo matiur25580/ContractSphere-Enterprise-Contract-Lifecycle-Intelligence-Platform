@@ -1,5 +1,5 @@
 import mongoose, { Types } from "mongoose";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HttpError } from "../src/common/http-error.js";
 import { Contract } from "../src/modules/contracts/contract.model.js";
 import { User } from "../src/modules/users/user.model.js";
@@ -63,7 +63,7 @@ describe.skipIf(!uri)("workflow service — MongoDB integration", () => {
     });
   }
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     const owner = await createUser(tenantId, "workflow-owner@example.test", "OWNER");
     ownerId = owner._id;
     approverA = (await createUser(tenantId, "approver-a@example.test"))._id;
