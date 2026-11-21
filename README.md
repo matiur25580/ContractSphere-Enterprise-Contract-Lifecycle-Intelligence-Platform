@@ -95,7 +95,7 @@ Every agreement should have an accountable owner, a traceable document history, 
 ### Contract intelligence and document processing
 - Deterministic rules identify selected clause categories, missing-term signals and selected drafting risks.
 - Findings include severity, confidence, explanation and source evidence when detected.
-- PDF and DOCX text extraction is supported for private stored versions.
+- PDF and DOCX text extraction is supported for private stored versions. PDFs with fewer than 100 extractable characters fall back to OCR: the API renders up to the first 10 pages at 160 DPI with Poppler `pdftoppm`, then recognizes English text with Tesseract. OCR work is bounded by per-command timeouts and temporary files are removed after processing.
 - An optional OpenAI-compatible provider can produce structured analysis when configured by the server.
 - AI output is schema-validated; a finding is kept only when its exact quoted evidence appears in the source text.
 - Provider credentials never enter browser code.
@@ -134,7 +134,7 @@ Every agreement should have an accountable owner, a traceable document history, 
 | Persistence | MongoDB, Mongoose |
 | Authentication | bcrypt, JWT access tokens, rotating opaque refresh sessions |
 | Document storage | AWS SDK v3, private S3-compatible object storage |
-| Document parsing | pdf-parse, Mammoth (DOCX) |
+| Document parsing | pdf-parse, Mammoth (DOCX), Poppler and Tesseract OCR for scanned PDFs |
 | Upload security | ClamAV daemon (INSTREAM protocol), file-signature validation, private S3 quarantine |
 | AI integration | Server-side OpenAI-compatible Chat Completions adapter |
 | Testing | Vitest, TypeScript type checking |
@@ -190,7 +190,7 @@ The project uses a **TypeScript modular monolith**. Domain modules are separated
 - npm 10+
 - MongoDB 7+ (local or Atlas)
 - An S3-compatible private bucket for document upload, download and stored-document analysis
-- ClamAV daemon reachable by the API on TCP port 3310 for malware scanning (required for document uploads)
+- ClamAV daemon reachable by the API on TCP port 3310 for malware scanning (required for document uploads)\n- Poppler (`pdftoppm`) and Tesseract OCR with the English language data for scanned-PDF OCR (optional for text-based PDFs)
 - Chromium only if generating the dashboard screenshot gallery
 
 ### Install and run
