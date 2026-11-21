@@ -101,6 +101,7 @@ async function main() {
    dashboard.intelligenceContractId = contractId;
    dashboard.intelligenceSourceLabel = "Enterprise services agreement — showcase fixture";
    dashboard.intelligenceSource = sourceText;
+   dashboard.$forceUpdate();
    await dashboard.$nextTick();
   }, { contractId: id, sourceText: source });
   await page.waitForTimeout(250);
