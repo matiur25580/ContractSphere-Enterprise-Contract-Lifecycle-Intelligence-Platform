@@ -188,7 +188,7 @@ The project uses a **TypeScript modular monolith**. Domain modules are separated
 ### Prerequisites
 - Node.js 20.19+ or 22.12+
 - npm 10+
-- MongoDB 7+ (local or Atlas)
+- MongoDB 7+ configured as a replica set or sharded cluster (local standalone MongoDB is not sufficient for transactional approval workflows)
 - An S3-compatible private bucket for document upload, download and stored-document analysis
 - ClamAV daemon reachable by the API on TCP port 3310 for malware scanning (required for document uploads)
 - Poppler (`pdftoppm`) and Tesseract OCR with English language data for scanned-PDF OCR (optional for text-based PDFs)
@@ -209,7 +209,12 @@ Configure the environment, then start both applications:
 - API: http://localhost:4000
 - Health endpoint: http://localhost:4000/api/v1/health (basic health), http://localhost:4000/api/v1/health/live (liveness) and http://localhost:4000/api/v1/health/ready (readiness)
 
-MongoDB must be reachable. Document workflows additionally require valid private object-storage configuration and a reachable ClamAV daemon. For local development, start ClamAV separately (for example, with the official `clamav/clamav` container) and set `CLAMAV_HOST` to the address reachable from the API process. Allow the daemon to finish loading its virus database before testing uploads. Upload completion fails closed when ClamAV is missing, unreachable, times out or returns an indeterminate result.
+MongoDB must be reachable through a replica-set or sharded-cluster connection string because approval submission and decisions use multi-document transactions. For local development, start a single-node replica set (not a standalone mongod):
+
+    docker run --detach --name contractsphere-mongo --publish 27017:27017 mongo:7.0 mongod --replSet rs0 --bind_ip_all
+    docker exec contractsphere-mongo mongosh --quiet --eval 'rs.initiate({_id: "rs0", members: [{_id: 0, host: "127.0.0.1:27017"}]})'
+
+Set `MONGODB_URI=mongodb://127.0.0.1:27017/contractsphere?replicaSet=rs0` in `apps/api/.env`. Wait for the replica set to elect its primary before starting the API. Document workflows additionally require valid private object-storage configuration and a reachable ClamAV daemon. For local development, start ClamAV separately (for example, with the official `clamav/clamav` container) and set `CLAMAV_HOST` to the address reachable from the API process. Allow the daemon to finish loading its virus database before testing uploads. Upload completion fails closed when ClamAV is missing, unreachable, times out or returns an indeterminate result.
 
 ### Environment variables
 
