@@ -6,7 +6,9 @@ import { Vendor } from "../vendors/vendor.model.js";
 import { Contract } from "./contract.model.js";
 import { ContractFile } from "./contract-file.model.js";
 import { UploadIntent } from "./upload-intent.model.js";
-import { createDownloadUrl, createUploadUrl, inspectStoredObject } from "./storage.service.js";
+import { createDownloadUrl, createUploadUrl, inspectStoredObject, readStoredObject, quarantineStoredObject } from "./storage.service.js";
+import { scanForMalware, verifyDocumentSignature } from "./document-security.service.js";
+import { recordAuditEvent } from "../audit/audit.service.js";
 
 const tenantObjectId = (id: string) => new Types.ObjectId(id);
 const safeFilename = (name: string) => name.normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "document";
@@ -85,6 +87,38 @@ export async function completeDocumentUpload(tenantId: string, userId: string, u
   if (!intent) throw new HttpError(404, "Upload request not found or expired.", "UPLOAD_INTENT_NOT_FOUND");
   const stored = await inspectStoredObject(intent.objectKey);
   if (stored.sizeBytes !== intent.sizeBytes || stored.contentType !== intent.mimeType) throw new HttpError(400, "Uploaded document metadata does not match the approved upload request.", "UPLOAD_VALIDATION_FAILED");
+  const bytes = await readStoredObject(intent.objectKey, 25 * 1024 * 1024);
+  try {
+    verifyDocumentSignature(bytes, intent.mimeType);
+    const scan = await scanForMalware(bytes);
+    if (!scan.clean) {
+      const quarantineKey = "quarantine/" + tenantId + "/" + randomUUID() + "-" + safeFilename(intent.originalName);
+      await quarantineStoredObject(intent.objectKey, quarantineKey);
+      await UploadIntent.updateOne({ _id: intent._id }, { $set: { scanStatus: "INFECTED", scanResult: scan.signature, quarantinedAt: new Date() } });
+      await recordAuditEvent({
+        tenantId, actorId: userId, action: "DOCUMENT_UPLOAD_QUARANTINED", resourceType: "CONTRACT",
+        resourceId: intent.contractId.toString(), summary: "A document upload was quarantined after malware detection.",
+        metadata: { scanner: "ClamAV", result: scan.signature.slice(0, 180) }
+      });
+      throw new HttpError(422, "The uploaded document was identified as malicious and moved to quarantine. It was not added to the contract.", "MALWARE_DETECTED");
+    }
+    await UploadIntent.updateOne({ _id: intent._id }, { $set: { scanStatus: "CLEAN", scanResult: "ClamAV: OK" } });
+  } catch (error) {
+    if (error instanceof HttpError && error.code === "MALWARE_DETECTED") throw error;
+    if (error instanceof HttpError && error.code === "DOCUMENT_SIGNATURE_INVALID") {
+      const quarantineKey = "quarantine/" + tenantId + "/" + randomUUID() + "-" + safeFilename(intent.originalName);
+      await quarantineStoredObject(intent.objectKey, quarantineKey);
+      await UploadIntent.updateOne({ _id: intent._id }, { $set: { scanStatus: "REJECTED", scanResult: error.code, quarantinedAt: new Date() } });
+      await recordAuditEvent({
+        tenantId, actorId: userId, action: "DOCUMENT_UPLOAD_REJECTED", resourceType: "CONTRACT",
+        resourceId: intent.contractId.toString(), summary: "A document upload was quarantined after file signature validation failed.",
+        metadata: { reason: error.code }
+      });
+      throw error;
+    }
+    await UploadIntent.updateOne({ _id: intent._id }, { $set: { scanStatus: "ERROR", scanResult: error instanceof Error ? error.message.slice(0, 220) : "Unknown scan error" } });
+    throw error;
+  }
   const contract = await Contract.findOne({ _id: intent.contractId, tenantId: tenant, status: { $ne: "ARCHIVED" } });
   if (!contract) throw new HttpError(404, "Contract not found.", "CONTRACT_NOT_FOUND");
 
