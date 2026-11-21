@@ -32,7 +32,7 @@ workflowRouter.post("/definitions", requireRoles("OWNER", "ADMIN"), validate(cre
 workflowRouter.post("/contracts/:contractId/submit", validate(submitWorkflowSchema), asyncHandler(async (req, res) => {
   const instance = await submitContractForApproval(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "contractId"), req.body.workflowDefinitionId);
   await recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action: "APPROVAL_SUBMITTED", resourceType: "CONTRACT", resourceId: idParam(req, "contractId"), summary: "Submitted contract for approval", metadata: { workflowInstanceId: instance.id } });
-  const approvers = instance.stages.flatMap(stage => stage.approverUserIds.map((id: { toString(): string }) => id.toString()));
+  const approvers = (instance.stages[0]?.approverUserIds ?? []).map(id => id.toString());
   await createNotificationsForUsers({ tenantId: req.auth!.tenantId, userIds: approvers, type: "APPROVAL_ASSIGNED", title: "Contract approval assigned", body: "A contract is waiting for your review.", link: "/?view=approvals", dedupeKey: `approval:${instance.id}:stage:0` });
   res.status(201).json({ success: true, data: { instance } });
 }));
@@ -43,5 +43,10 @@ workflowRouter.get("/tasks/mine", asyncHandler(async (req, res) => {
 workflowRouter.post("/instances/:instanceId/decision", validate(workflowDecisionSchema), asyncHandler(async (req, res) => {
   const instance = await decideOnWorkflow(req.auth!.tenantId, req.auth!.userId, idParam(req, "instanceId"), req.body);
   await recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action: `APPROVAL_${req.body.decision}`, resourceType: "WORKFLOW_INSTANCE", resourceId: instance.id, summary: `Recorded approval decision: ${req.body.decision}`, metadata: { decision: req.body.decision } });
+  if (instance.status === "IN_PROGRESS") {
+    const activeStage = instance.stages[instance.currentStageIndex];
+    const approvers = (activeStage?.approverUserIds ?? []).map(id => id.toString());
+    await createNotificationsForUsers({ tenantId: req.auth!.tenantId, userIds: approvers, type: "APPROVAL_ASSIGNED", title: "Contract approval assigned", body: "A contract is waiting for your review.", link: "/?view=approvals", dedupeKey: `approval:${instance.id}:stage:${instance.currentStageIndex}` });
+  }
   res.json({ success: true, data: { instance } });
 }));

@@ -213,7 +213,7 @@ async function submitAuth() {
   try {
     if (mode.value === "register") await auth.register({ ...form });
     else await auth.login({ organizationSlug: form.organizationSlug, email: form.email, password: form.password });
-    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors()]);
+    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors(), loadNotifications()]);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Something went wrong. Please try again.";
   }
