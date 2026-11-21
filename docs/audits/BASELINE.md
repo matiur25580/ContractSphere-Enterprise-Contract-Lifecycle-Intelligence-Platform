@@ -103,3 +103,47 @@ This audit branch is intentionally separate from `main`. Merge only after the im
 - Current document-job tests validate the status enum and OCR-selection helper, but do not exercise worker lease expiry, concurrent job claims, retry limits, or upload-completion races. Add database-backed integration tests before changing the worker or upload transaction behavior.
 - The CI workflow currently installs with `npm install` and the root repository has no committed lockfile. The observed CI run passed, but dependency resolution is not pinned to a reviewed lockfile. Add and commit the workspace lockfile after a reproducible install/test run.
 
+
+
+## Follow-up findings — 2026-11-21
+
+This section records findings confirmed during the subsequent PR and source review. The audit remains an engineering review, not a production-readiness certification.
+
+### F-05 — Dashboard screenshot automation requires a reliable submit path
+
+- **Severity:** Medium (release-evidence reliability).
+- **Evidence:** Screenshot runs 44927560961, 44927872201, 44928155837, and 44928928105 failed after the earlier source-label correction. Diagnostics showed that the fixture values were present in Vue component state while the rendered submit button remained disabled. A later attempt to force a component update produced a separate render error because the dashboard's `documentJobSummary` shape was not initialized as expected.
+- **Correction:** PR #8 replaces mutation of Vue private/public component internals with Playwright form interaction, explicit form-state checks, and a dispatched submit event that exercises the Vue form submit handler. PR #8 merged as `7c0113ff595c127eeccf987c084e5c779337ac9f`.
+- **Verification:** PR CI passed and main CI run [44929216169](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44929216169) passed. Dashboard screenshot run [44929216174](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44929216174) was still running at the time of this update. Therefore the screenshot issue is **not yet verified resolved**.
+
+### F-06 — Workflow terminal state and contract state are not committed atomically
+
+- **Severity:** High (data consistency; failure scenario requires integration verification).
+- **Evidence:** `decideOnWorkflow` first updates a workflow instance to REJECTED or APPROVED/terminal state, then separately calls `Contract.updateOne` to transition the contract from IN_REVIEW to DRAFT or APPROVED. The result of the contract update is not checked. The two writes are not enclosed in a database transaction.
+- **Risk:** If the contract update fails because the contract was changed/deleted or a database error occurs, the workflow can be terminal while the contract remains IN_REVIEW. A retry may not repair the mismatch because the workflow is no longer active.
+- **Recommended action:** Add replica-set-backed integration tests that force the second write to fail and verify the expected invariant. Prefer a MongoDB transaction for both state changes if the production topology supports transactions. Otherwise introduce an explicit recoverable transition/outbox design and reconciliation process. Do not simply ignore a failed contract update or mark the workflow terminal before the contract transition is durable.
+- **Status:** Confirmed from source inspection; runtime failure reproduction and remediation remain outstanding.
+
+### F-07 — Access-token revocation is bounded by token lifetime, not immediate
+
+- **Severity:** Medium (account deactivation/revocation behavior).
+- **Evidence:** `requireAuth` verifies JWT signature/claims and populates request auth context but does not query the current user or tenant status. The `/me` endpoint separately calls `getCurrentUser`, which checks that both are active. Other authenticated routes rely on the verified access token and route-level tenant/role checks.
+- **Risk:** A user or tenant deactivated after token issuance may continue to use an already-issued access token until it expires, unless another global revocation mechanism is applied. Refresh-token rotation does check active user and tenant state, preventing a deactivated account from obtaining a new access token.
+- **Recommended action:** Confirm and document the accepted access-token revocation window. If immediate deactivation is required, add a low-cost token/session version check or cache-backed revocation strategy, and test it across protected routes.
+- **Status:** Confirmed design behavior; severity depends on the required revocation SLA.
+
+### F-08 — Refresh-token reuse detection and session-family revocation need review
+
+- **Severity:** Medium (session security hardening).
+- **Evidence:** Refresh rotation atomically marks the matching unrevoked, unexpired token hash as revoked before issuing a replacement. A repeated use of the old token returns INVALID_REFRESH_TOKEN. The inspected service does not visibly associate rotated tokens into a family or revoke the replacement session when reuse of an older token is detected.
+- **Risk:** A replay attempt is rejected, but the service does not appear to detect a compromised token family and revoke its active successor. The security impact depends on the threat model and whether the attacker also possesses the latest refresh token.
+- **Recommended action:** Review the refresh-session schema and threat model. Consider token-family identifiers and replay-triggered family revocation, with tests for simultaneous refreshes, replay, logout, and inactive users.
+- **Status:** Requires schema and integration-test review before implementation.
+
+## Current verification snapshot
+
+- PR #2 through PR #8 were merged to main after their respective PR CI checks passed.
+- PR #6 added atomic conditional updates for draft template edits and template approval; broader database race tests are still outstanding.
+- Main CI run 44929216169 for merge commit `7c0113ff595c127eeccf987c084e5c779337ac9f` completed successfully.
+- Main dashboard screenshot run 44929216174 was in progress when this section was authored; no success is claimed.
+- No production deployment, cloud configuration review, penetration test, or production-like database integration suite has been performed by this audit.
