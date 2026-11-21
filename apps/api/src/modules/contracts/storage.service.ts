@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand, CopyObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../config/env.js";
 import { HttpError } from "../../common/http-error.js";
@@ -31,7 +31,7 @@ export async function inspectStoredObject(objectKey: string) {
 export async function readStoredObject(objectKey: string, maxBytes: number) {
   const { client, bucket } = storage();
   const metadata = await inspectStoredObject(objectKey);
-  if (metadata.sizeBytes < 1 || metadata.sizeBytes > maxBytes) throw new HttpError(413, "The document exceeds the 10 MB analysis limit.", "DOCUMENT_TOO_LARGE");
+  if (metadata.sizeBytes < 1 || metadata.sizeBytes > maxBytes) throw new HttpError(413, "The uploaded document exceeds the permitted size limit.", "DOCUMENT_TOO_LARGE");
   const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: objectKey }));
   if (!result.Body) throw new HttpError(422, "The stored document has no readable content.", "DOCUMENT_EMPTY");
   return Buffer.from(await result.Body.transformToByteArray());
@@ -39,4 +39,17 @@ export async function readStoredObject(objectKey: string, maxBytes: number) {
 export async function createDownloadUrl(objectKey: string) {
   const { client, bucket } = storage();
   return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: objectKey }), { expiresIn: 60 });
+}
+
+export async function quarantineStoredObject(objectKey: string, quarantineKey: string) {
+  const { client, bucket } = storage();
+  await client.send(new CopyObjectCommand({
+    Bucket: bucket,
+    Key: quarantineKey,
+    CopySource: bucket + "/" + objectKey.split("/").map(encodeURIComponent).join("/"),
+    MetadataDirective: "COPY",
+    ServerSideEncryption: "AES256"
+  }));
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }));
+  return quarantineKey;
 }
