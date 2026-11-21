@@ -79,6 +79,28 @@ The API returns a short-lived JWT access token in the response body. The opaque 
 
 Roles currently defined are `OWNER`, `ADMIN`, and `MEMBER`. The reusable `requireRoles(...)` middleware is available for protected administrative routes. Tenant IDs are carried in verified access-token claims; future tenant-owned resource modules must scope every database query by that tenant ID.
 
+## Contract repository API
+
+All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/contracts` | Create a contract record |
+| GET | `/contracts` | Search/filter contracts with pagination |
+| GET | `/contracts/:contractId` | Retrieve metadata and version history |
+| PATCH | `/contracts/:contractId` | Update contract metadata/status |
+| POST | `/contracts/:contractId/uploads` | Request a short-lived private object-storage upload URL |
+| POST | `/contracts/uploads/:uploadId/complete` | Verify the stored object and register a new version |
+| GET | `/contracts/:contractId/versions/:fileId/download` | Generate a short-lived download URL |
+
+Contract search supports `q`, `status`, `type`, `counterparty`, `page`, `limit`, `sort`, and `order`. Search is always constrained by the authenticated tenant. Contract numbers are unique within an organization.
+
+### Document storage setup
+
+Document bytes are stored in a **private S3-compatible bucket**; MongoDB stores metadata, version records, and upload intents. Configure all four required storage settings in `apps/api/.env`: `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`. Optionally set `S3_ENDPOINT` for MinIO or another S3-compatible provider. The bucket must remain private and should have lifecycle, encryption, and access logging policies configured.
+
+The API issues five-minute, server-generated PUT URLs for PDF and DOCX files up to 25 MiB. After upload, the client calls the completion endpoint; the API checks object size and declared content type before creating a version record. Download URLs expire after 60 seconds. Configure bucket CORS to allow the web origin to PUT with the signed `Content-Type` header. For production, add malware scanning, file-signature inspection, retention policies, and a managed secrets provider before accepting sensitive agreements.
+
 ## Engineering principles
 
 1. Enforce tenant scope on the server for every tenant-owned resource.
@@ -94,7 +116,8 @@ Roles currently defined are `OWNER`, `ADMIN`, and `MEMBER`. The reusable `requir
 - [x] Initial monorepo and API/web application scaffold
 - [x] Authentication, tenant onboarding, and organization context
 - [x] Initial users, roles, and role-based route guard
-- [ ] Contract repository, document upload, metadata, and versioning
+- [x] Contract repository API, metadata, tenant-scoped search, and document versioning
+- [x] Private S3-compatible upload/download URL workflow
 - [ ] Templates, clauses, and approval workflow engine
 - [ ] Obligations, renewals, vendors, and notifications
 - [ ] AI-assisted contract intelligence with evidence references

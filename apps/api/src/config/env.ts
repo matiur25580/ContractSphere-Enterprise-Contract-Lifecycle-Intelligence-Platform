@@ -10,10 +10,19 @@ const schema = z.object({
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   JWT_ACCESS_SECRET: z.string().min(32).default("local-development-only-change-this-secret"),
   ACCESS_TOKEN_TTL: z.string().default("15m"),
-  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30)
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
+  S3_BUCKET: z.string().min(1).optional(),
+  S3_REGION: z.string().min(1).optional(),
+  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  S3_ENDPOINT: z.string().url().optional()
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === "production" && !process.env.JWT_ACCESS_SECRET) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["JWT_ACCESS_SECRET"], message: "JWT_ACCESS_SECRET is required in production." });
+  }
+  const storageValues = [value.S3_BUCKET, value.S3_REGION, value.S3_ACCESS_KEY_ID, value.S3_SECRET_ACCESS_KEY];
+  if (storageValues.some(Boolean) && storageValues.some(item => !item)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["S3_BUCKET"], message: "S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY must be configured together." });
   }
 });
 
