@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const baseUrl = process.env.SCREENSHOT_BASE_URL || "http://127.0.0.1:5173";
@@ -51,6 +51,7 @@ async function waitForServer(url, child) {
 }
 async function main() {
  await mkdir(output, { recursive: true });
+ for (const file of await readdir(output)) if (file.endsWith(".png")) await rm(output + "/" + file, { force: true });
  await waitForServer(baseUrl, server);
  const browser = await chromium.launch({ headless: true });
  try {
