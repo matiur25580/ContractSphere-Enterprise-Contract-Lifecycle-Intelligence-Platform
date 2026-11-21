@@ -15,4 +15,5 @@ const auditEventSchema = new Schema({
 auditEventSchema.index({ tenantId: 1, occurredAt: -1 });
 auditEventSchema.index({ tenantId: 1, resourceType: 1, resourceId: 1, occurredAt: -1 });
 export type AuditEventDocument = InferSchemaType<typeof auditEventSchema>;
-export const AuditEvent = (models.AuditEvent as Model<any> | undefined) ?? model("AuditEvent", auditEventSchema);
+const AuditEventModel = (models.AuditEvent || model("AuditEvent", auditEventSchema)) as Model<any>;
+export const AuditEvent: Model<any> = AuditEventModel;

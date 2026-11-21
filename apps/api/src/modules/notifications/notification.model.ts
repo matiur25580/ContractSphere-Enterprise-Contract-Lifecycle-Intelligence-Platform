@@ -14,4 +14,5 @@ const notificationSchema = new Schema({
 notificationSchema.index({ tenantId: 1, userId: 1, createdAt: -1 });
 notificationSchema.index({ tenantId: 1, userId: 1, readAt: 1, createdAt: -1 });
 notificationSchema.index({ tenantId: 1, userId: 1, dedupeKey: 1 }, { unique: true, partialFilterExpression: { dedupeKey: { $type: "string" } } });
-export const Notification = (models.Notification as Model<any> | undefined) ?? model("Notification", notificationSchema);
+const NotificationModel = (models.Notification || model("Notification", notificationSchema)) as Model<any>;
+export const Notification: Model<any> = NotificationModel;
