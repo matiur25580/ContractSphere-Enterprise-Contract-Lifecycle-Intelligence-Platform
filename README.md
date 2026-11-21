@@ -206,7 +206,7 @@ Configure the environment, then start both applications:
 
 - Web application: http://localhost:5173
 - API: http://localhost:4000
-- Health endpoint: http://localhost:4000/api/v1/health
+- Health endpoint: http://localhost:4000/api/v1/health (basic health), http://localhost:4000/api/v1/health/live (liveness) and http://localhost:4000/api/v1/health/ready (readiness)
 
 MongoDB must be reachable. Document workflows additionally require valid private object-storage configuration and a reachable ClamAV daemon. For local development, start ClamAV separately (for example, with the official `clamav/clamav` container) and set `CLAMAV_HOST` to the address reachable from the API process. Allow the daemon to finish loading its virus database before testing uploads. Upload completion fails closed when ClamAV is missing, unreachable, times out or returns an indeterminate result.
 
@@ -332,7 +332,7 @@ Contract search supports query, status, type, counterparty, pagination and sorti
 | POST | /contracts/:contractId/intelligence/analyze | Analyze pasted contract text |
 | POST | /contracts/:contractId/intelligence/documents/:fileId/analyze | Extract and analyze stored PDF/DOCX |
 | GET | /contracts/:contractId/intelligence | Read latest 20 analysis reports |
-| GET | /contracts/:contractId/intelligence/jobs/:jobId | Read authorized background-analysis job status |
+| GET | /contracts/intelligence/jobs | Read latest 30 authorized background-analysis jobs and status totals |\n| GET | /contracts/:contractId/intelligence/jobs/:jobId | Read authorized background-analysis job status |
 | POST | /contracts/:contractId/intelligence/compare | Compare two pasted texts or two stored document versions |
 | GET | /contracts/:contractId/intelligence/comparisons | Read latest 20 version comparisons |
 
@@ -367,7 +367,7 @@ These are pattern-based signals, not complete legal analysis. Clause wording, ju
 - Supported: text-based PDF and DOCX.
 - Maximum stored-document analysis size: 10 MiB.
 - Maximum extracted text: 30,000 characters.
-- Not supported: OCR for scanned/image-only PDF, encrypted documents, malware scanning, advanced table reconstruction or guaranteed extraction of complex layouts.
+- Not supported: encrypted documents, advanced table reconstruction or guaranteed extraction of complex layouts.
 - Upload metadata verification is not a substitute for file-signature validation or malware scanning.
 - Background processing is durable only when MongoDB is configured and reachable. The API starts one worker process per API instance; job claiming uses atomic MongoDB updates and expiring leases to recover after crashes. Retries are bounded to three attempts.
 
@@ -520,7 +520,7 @@ The repository view brings agreement identity, counterparty, lifecycle status, v
 - [ ] Durable jobs, reminders and outbound notification delivery
 - [ ] Malware scanning and deeper document validation
 - [ ] Database-enforced audit immutability and enterprise retention controls
-- [ ] End-to-end security, performance and disaster-recovery validation
+- [ ] End-to-end security, performance and disaster-recovery validation\n- [ ] Production readiness, dependency and infrastructure configuration review
 
 ---
 
