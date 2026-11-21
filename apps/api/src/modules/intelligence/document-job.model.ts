@@ -24,4 +24,5 @@ const schema = new Schema({
 }, { timestamps: true, versionKey: false });
 schema.index({ status: 1, nextRunAt: 1, createdAt: 1 });
 schema.index({ tenantId: 1, contractId: 1, createdAt: -1 });
+schema.index({ tenantId: 1, fileId: 1 }, { unique: true });
 export const DocumentProcessingJob = model("DocumentProcessingJob", schema);
