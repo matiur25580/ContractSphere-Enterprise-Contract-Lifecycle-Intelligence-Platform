@@ -24,7 +24,8 @@ interface VendorItem { _id: string; legalName: string; displayName?: string; cat
 interface NotificationItem { _id: string; type: string; title: string; body: string; link?: string; readAt: string | null; createdAt: string }
 interface TemplateItem { _id: string; name: string; contractType: string; version: number; status: string; fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>; sections: Array<{ heading: string; content: string }> }
 interface ClauseItem { _id: string; key: string; title: string; category: string; body: string; version: number }
-interface IntelligenceReport { _id: string; engine: string; summary: string; findings: Array<{ key: string; title: string; category: string; severity: string; confidence: number; explanation: string; evidence: { excerpt: string; start: number; end: number } | null }>; extractedClauses: Array<{ key: string; label: string; found: boolean }>; missingTerms: string[]; riskCounts: Record<string, number>; createdAt: string }\ninterface ContractComparison { _id: string; baselineLabel: string; candidateLabel: string; similarityScore: number; summary: string; clauseChanges: Array<{ key: string; label: string; change: string; baselineEvidence: string | null; candidateEvidence: string | null }>; findingChanges: Array<{ key: string; title: string; change: string; baselineSeverity: string | null; candidateSeverity: string | null }>; additions: Array<{ excerpt: string }>; removals: Array<{ excerpt: string }>; createdAt: string }
+interface IntelligenceReport { _id: string; engine: string; summary: string; findings: Array<{ key: string; title: string; category: string; severity: string; confidence: number; explanation: string; evidence: { excerpt: string; start: number; end: number } | null }>; extractedClauses: Array<{ key: string; label: string; found: boolean }>; missingTerms: string[]; riskCounts: Record<string, number>; createdAt: string }
+interface ContractComparison { _id: string; baselineLabel: string; candidateLabel: string; similarityScore: number; summary: string; clauseChanges: Array<{ key: string; label: string; change: string; baselineEvidence: string | null; candidateEvidence: string | null }>; findingChanges: Array<{ key: string; title: string; change: string; baselineSeverity: string | null; candidateSeverity: string | null }>; additions: Array<{ excerpt: string }>; removals: Array<{ excerpt: string }>; createdAt: string }
 
 const auth = useAuthStore();
 const notifications = ref<NotificationItem[]>([]);
@@ -64,7 +65,11 @@ const generatedDraft = ref("");
 const intelligenceContractId = ref("");
 const intelligenceSource = ref("");
 const intelligenceSourceLabel = ref("Pasted contract text");
-const intelligenceEngine = ref<"RULE_BASED" | "AI_COMPATIBLE">("RULE_BASED");\nconst comparisonBaseline = ref("");\nconst comparisonCandidate = ref("");\nconst comparisonResult = ref<ContractComparison | null>(null);\nconst comparingContract = ref(false);
+const intelligenceEngine = ref<"RULE_BASED" | "AI_COMPATIBLE">("RULE_BASED");
+const comparisonBaseline = ref("");
+const comparisonCandidate = ref("");
+const comparisonResult = ref<ContractComparison | null>(null);
+const comparingContract = ref(false);
 const intelligenceReport = ref<IntelligenceReport | null>(null);
 const analyzingContract = ref(false);
 const savingTemplate = ref(false);
@@ -438,7 +443,8 @@ async function compareContractVersions() {
  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not compare these contract versions."; }
  finally { comparingContract.value = false; }
 }
-\nasync function signOut() {
+
+async function signOut() {
   await auth.logout();
   contracts.value = [];
   notifications.value = [];

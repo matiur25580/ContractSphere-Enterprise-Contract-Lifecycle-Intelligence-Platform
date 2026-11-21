@@ -41,8 +41,17 @@ const report = { _id:"652000000000000000000001",engine:"RULE_BASED",summary:"Rev
  ],extractedClauses:[{key:"confidentiality",label:"Confidentiality",found:true},{key:"liability",label:"Limitation of liability",found:true},{key:"indemnity",label:"Indemnification",found:true},{key:"termination",label:"Termination",found:true},{key:"governing_law",label:"Governing law",found:true},{key:"disputes",label:"Dispute resolution",found:true},{key:"payment",label:"Payment terms",found:true},{key:"data_protection",label:"Data protection",found:true},{key:"renewal",label:"Renewal",found:true},{key:"force_majeure",label:"Force majeure",found:false}],missingTerms:["Force majeure"],riskCounts:{CRITICAL:1,HIGH:0,MEDIUM:1,LOW:1},createdAt:"2026-11-21T10:00:00.000Z"};
 const comparison = {_id:"653000000000000000000001",baselineLabel:"Earlier version",candidateLabel:"Proposed version",similarityScore:86,summary:"Compared Earlier version with Proposed version: 1 clause category added, 0 removed, 2 text additions and 1 removal captured. 1 new or elevated risk signals require review.",clauseChanges:[{key:"liability",label:"Limitation of liability",change:"ADDED",baselineEvidence:null,candidateEvidence:"The supplier's liability under this agreement shall be unlimited."}],findingChanges:[{key:"uncapped_liability",title:"Potential uncapped liability",change:"NEW",baselineSeverity:null,candidateSeverity:"CRITICAL"}],additions:[{excerpt:"The supplier's liability under this agreement shall be unlimited."},{excerpt:"This agreement will automatically renew for successive one-year terms."}],removals:[{excerpt:"The supplier's aggregate liability shall not exceed fees paid in the preceding twelve months."}],createdAt:"2026-11-21T10:00:00.000Z"};
 function ok(data) { return { success: true, data }; }
+async function waitForServer(url, child) {
+ for (let attempt = 0; attempt < 120; attempt += 1) {
+  if (child.exitCode !== null) throw new Error("Vite exited before the dashboard became available.");
+  try { const response = await fetch(url); if (response.ok) return; } catch {}
+  await new Promise(resolve => setTimeout(resolve, 500));
+ }
+ throw new Error("Vite did not become ready within 60 seconds.");
+}
 async function main() {
  await mkdir(output, { recursive: true });
+ await waitForServer(baseUrl, server);
  const browser = await chromium.launch({ headless: true });
  try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, deviceScaleFactor: 1 });
