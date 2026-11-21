@@ -185,3 +185,23 @@ This section records findings confirmed during the subsequent PR and source revi
 - The current test suite includes validation-focused auth/workflow tests and basic document-job lifecycle/OCR helper tests. It does not yet provide the database-backed concurrency and authorization matrix described above.
 - The root workspace still has no committed `package-lock.json`; CI continues to use `npm install`. Reproducible dependency installation remains outstanding.
 - No local clean install, local test/build execution, replica-set integration suite, production cloud configuration review, penetration test, or deployment has been performed as part of this remote review.
+
+
+## Verification update — PRs #14 and #15 (2026-11-21)
+
+### Merged test coverage
+
+- PR #14 added unit tests for authentication middleware: missing bearer credentials, malformed/expired JWTs, missing required claims, unsupported roles, verified claim attachment, and role-guard behavior. Its GitHub Actions verification passed before merge. Merge commit: `c2d196df3ae12f97efddfcab4c276aed205059b3`.
+- PR #15 added deterministic unit tests for contract-intelligence rule analysis: Unicode normalization, critical uncapped-liability findings, evidence offsets, broad indemnity wording, missing clause flags, renewal-notice handling, severity ordering, and risk counters. Its GitHub Actions verification passed before merge. Merge commit: `d151024a970d5f6fc66eccd2c79c8d7731dfa18c`.
+- These tests improve middleware and pure analysis-function coverage. They do **not** constitute database-backed authorization, tenant-isolation, workflow-transition, upload-concurrency, or worker-lease integration tests.
+
+### Current CI and verification limitations
+
+- PR #14 verification run [44930804855](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44930804855) completed successfully.
+- PR #15 verification run [44930993839](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44930993839) completed successfully.
+- The CI workflow currently runs `npm install`, production dependency audit, workspace typecheck/build, and API Vitest tests. It does not provision MongoDB or a replica set, so it cannot verify database transaction semantics, unique-index races, worker lease takeover, or tenant isolation against a real database.
+- The root `package-lock.json` remains absent. Do not claim deterministic dependency resolution until a lockfile is generated and `npm ci` succeeds in CI.
+- The upload completion path still has no atomic processing claim before storage inspection/scanning. The compound contract-file version index and optimistic contract update mitigate some races, but concurrent requests can repeat scanning and failure/retry behavior between file creation, job enqueue, and intent completion remains unverified.
+- F-06 workflow/contract non-atomic transition and F-09 worker lease/idempotency risks remain open as described above.
+
+**Scope note:** This is a remote source and GitHub Actions review. No local clean install, local build/test, replica-set-backed integration run, production cloud configuration review, penetration test, or deployment is claimed.
