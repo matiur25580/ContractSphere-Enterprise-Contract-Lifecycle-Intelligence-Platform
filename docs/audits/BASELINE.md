@@ -241,3 +241,24 @@ This section records findings confirmed during the subsequent PR and source revi
 - Upload completion and document worker lease/idempotency risks F-02 and F-09 remain open. No S3/ClamAV integration or worker lease-takeover integration test is claimed.
 - The root npm lockfile remains absent and CI still uses `npm install`; deterministic dependency resolution remains outstanding.
 - This remains a source review with CI evidence, not a production-readiness certification, penetration test, production cloud review, or deployment.
+
+
+## Verification update — upload completion idempotency (2026-11-21)
+
+### F-02 remediation
+
+- PR #21 merged as `2f8bd7cb9683be621697d3248e542e5855331146`.
+- Upload intents now use an atomic processing claim with a ten-minute lease. Concurrent completion requests receive `UPLOAD_COMPLETION_IN_PROGRESS` rather than repeating storage inspection and malware scanning.
+- A successful completion commits the ContractFile version, optimistic contract latest-version update, one DocumentProcessingJob, and UploadIntent completion in a single MongoDB transaction.
+- A unique `(tenantId, fileId)` index prevents more than one analysis job for a stored document version.
+- A client retry after a committed completion returns the existing file and job. Retryable scanner/queue errors release the claim; malware and invalid-signature quarantine outcomes are recorded as terminal.
+- The MongoDB integration tests use isolated databases for workflow and upload suites. They cover clean completion, replay idempotency, concurrent completion (one scan), queue-write rollback/retry, and scanner failure/retry.
+- PR #21 verification run [44932878666](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44932878666) completed successfully, including dependency audit, typecheck, build and replica-set-backed API tests.
+
+### Scope and remaining limitations
+
+- The integration tests mock S3 and ClamAV network calls. They verify MongoDB transaction and upload orchestration behavior, not real bucket policy, signed URL enforcement, malware daemon behavior, object quarantine permissions, or S3 failure recovery.
+- The ten-minute upload processing lease is a crash-recovery boundary. Operational monitoring for repeatedly reclaimed intents and reconciliation of objects uploaded but never completed remain useful future hardening.
+- F-09 document-worker lease expiry/idempotent report side effects remains open; the new unique job-per-file index prevents duplicate queue rows for the same file but does not itself fence all worker side effects.
+- The root npm lockfile remains absent; CI continues to use `npm install`.
+- No live production storage/scanner test, cloud review, penetration test, or deployment is claimed.
