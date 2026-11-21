@@ -24,6 +24,9 @@ export interface ContractDocument {
   tags: string[];
   latestVersion: number;
   latestDocumentId?: Types.ObjectId;
+  generatedDraftContent?: string;
+  sourceTemplateId?: Types.ObjectId;
+  sourceTemplateVersion?: number;
   archivedAt?: Date;
 }
 
@@ -46,6 +49,9 @@ const schema = new Schema<ContractDocument>({
   tags: [{ type: String, trim: true, lowercase: true, maxlength: 32 }],
   latestVersion: { type: Number, default: 0, min: 0 },
   latestDocumentId: { type: Schema.Types.ObjectId, ref: "ContractFile" },
+  generatedDraftContent: { type: String, maxlength: 250000 },
+  sourceTemplateId: { type: Schema.Types.ObjectId, ref: "ContractTemplate" },
+  sourceTemplateVersion: { type: Number, min: 1 },
   archivedAt: Date
 }, { timestamps: true, versionKey: "__v" });
 

@@ -22,6 +22,8 @@ interface ObligationItem { _id: string; title: string; type: string; status: str
 interface RenewalItem { _id: string; expiryDate: string; noticeDeadline: string; noticePeriodDays: number; renewalType: string; status: string; contractId: { title: string; contractNumber: string; counterparty: string } | null; }
 interface VendorItem { _id: string; legalName: string; displayName?: string; category: string; status: string; country?: string; industry?: string; riskLevel: string; riskScore: number; contacts: Array<{ name: string; email: string; primary: boolean }>; certifications: Array<{ name: string; status: string }> }
 interface NotificationItem { _id: string; type: string; title: string; body: string; link?: string; readAt: string | null; createdAt: string }
+interface TemplateItem { _id: string; name: string; contractType: string; version: number; status: string; fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>; sections: Array<{ heading: string; content: string }> }
+interface ClauseItem { _id: string; key: string; title: string; category: string; body: string; version: number }
 
 const auth = useAuthStore();
 const notifications = ref<NotificationItem[]>([]);
@@ -49,6 +51,14 @@ const vendors = ref<VendorItem[]>([]);
 const vendorForm = reactive({ legalName: "", displayName: "", category: "SUPPLIER", industry: "", country: "", website: "", contactName: "", contactEmail: "" });
 const vendorAssessment = reactive({ vendorId: "", score: 20, factors: "" });
 const savingVendor = ref(false);
+const templates = ref<TemplateItem[]>([]);
+const clauses = ref<ClauseItem[]>([]);
+const templateForm = reactive({ name: "Mutual NDA", contractType: "NDA", sectionHeading: "Effective date", sectionContent: "This agreement is effective from {{effectiveDate}}. Replace this sample language with approved legal wording.", clauseId: "" });
+const clauseForm = reactive({ key: "", title: "", category: "General", body: "" });
+const generationForm = reactive({ templateId: "", contractNumber: "", counterparty: "", effectiveDate: "" });
+const generatedDraft = ref("");
+const savingTemplate = ref(false);
+const savingClause = ref(false);
 const workflowForm = reactive({ name: 'Standard contract review', approverUserIds: '' });
 const creatingWorkflow = ref(false);
 const selectedWorkflowId = ref('');
@@ -126,6 +136,45 @@ async function loadVendors() {
   catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load vendors."; }
 }
 
+async function loadTemplates() {
+ if (!auth.accessToken) return;
+ try {
+  const [templateResult, clauseResult] = await Promise.all([api<{ templates: TemplateItem[] }>("/templates"), api<{ clauses: ClauseItem[] }>("/templates/clauses")]);
+  templates.value = templateResult.templates; clauses.value = clauseResult.clauses;
+  if (!generationForm.templateId) generationForm.templateId = templates.value.find(item => item.status === "APPROVED")?._id ?? "";
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load templates and clauses."; }
+}
+async function createClause() {
+ savingClause.value = true; errorMessage.value = "";
+ try {
+  await api("/templates/clauses", { method: "POST", body: JSON.stringify(clauseForm) });
+  Object.assign(clauseForm, { key: "", title: "", category: "General", body: "" }); successMessage.value = "Clause added to the organization library."; await loadTemplates();
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not create clause."; } finally { savingClause.value = false; }
+}
+async function createTemplate() {
+ savingTemplate.value = true; errorMessage.value = "";
+ try {
+  await api("/templates", { method: "POST", body: JSON.stringify({
+   name: templateForm.name, contractType: templateForm.contractType,
+   fields: [{ key: "effectiveDate", label: "Effective date", type: "DATE", required: true, options: [] }],
+   sections: [{ heading: templateForm.sectionHeading, content: templateForm.sectionContent, ...(templateForm.clauseId ? { clauseId: templateForm.clauseId } : {}), optional: false }]
+  }) });
+  successMessage.value = "Draft template created. Submit it for independent approval."; await loadTemplates();
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not create template."; } finally { savingTemplate.value = false; }
+}
+async function templateAction(template: TemplateItem, action: "submit" | "approve" | "revisions") {
+ errorMessage.value = "";
+ try { await api(`/templates/${template._id}/${action}`, { method: "POST" }); successMessage.value = action === "submit" ? "Template submitted for approval." : action === "approve" ? "Template approved for use." : "New draft revision created."; await loadTemplates(); }
+ catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not update template."; }
+}
+async function generateFromTemplate() {
+ errorMessage.value = ""; generatedDraft.value = "";
+ try {
+  const result = await api<{ contract: ContractSummary; draftContent: string }>(`/templates/${generationForm.templateId}/generate`, { method: "POST", body: JSON.stringify({ contractNumber: generationForm.contractNumber, counterparty: generationForm.counterparty, values: { effectiveDate: generationForm.effectiveDate } }) });
+  generatedDraft.value = result.draftContent; successMessage.value = `Draft ${result.contract.contractNumber} created. Review the wording before approval or signature.`;
+  await loadContracts();
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not generate contract draft."; }
+}
 async function createVendor() {
   errorMessage.value = ""; savingVendor.value = true;
   try {
@@ -204,7 +253,7 @@ onMounted(async () => {
   await auth.restore();
   if (auth.user) {
     if (!workflowForm.approverUserIds) workflowForm.approverUserIds = auth.user.id;
-    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors(), loadNotifications()]);
+    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors(), loadNotifications(), loadTemplates()]);
   }
 });
 
@@ -449,6 +498,42 @@ async function signOut() {
         </div>
       </section>
 
+
+      <section class="template-grid">
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">STANDARD LANGUAGE</span><h2>Clause library <span class="count-chip">{{ clauses.length }}</span></h2></div><button class="refresh-button" @click="loadTemplates">↻ Refresh</button></div>
+          <form @submit.prevent="createClause">
+            <label>Clause key<input v-model="clauseForm.key" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" placeholder="limitation-of-liability"/></label>
+            <div class="form-row"><label>Clause title<input v-model="clauseForm.title" required minlength="2" maxlength="160" placeholder="Limitation of liability"/></label><label>Category<input v-model="clauseForm.category" required maxlength="80" placeholder="Risk"/></label></div>
+            <label>Reusable wording<textarea v-model="clauseForm.body" required rows="4" maxlength="20000" placeholder="Enter reusable clause language…"></textarea></label>
+            <button class="primary-button" type="submit" :disabled="savingClause">{{ savingClause ? "Saving…" : "Add clause v1" }}</button>
+          </form>
+          <div class="definition-list"><article v-for="clause in clauses" :key="clause._id" class="definition-row"><strong>{{ clause.title }} <span class="count-chip">v{{ clause.version }}</span></strong><small>{{ clause.category }} · {{ clause.key }}</small><p>{{ clause.body }}</p></article><p v-if="!clauses.length" class="panel-note">Create reusable clauses to pin their wording into approved templates.</p></div>
+        </div>
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">GOVERNED AGREEMENTS</span><h2>Template studio <span class="count-chip">{{ templates.length }}</span></h2></div></div>
+          <form @submit.prevent="createTemplate">
+            <label>Template name<input v-model="templateForm.name" required minlength="3" maxlength="160"/></label>
+            <div class="form-row"><label>Agreement type<select v-model="templateForm.contractType"><option>NDA</option><option>MSA</option><option>SOW</option><option>SUPPLIER</option><option>EMPLOYMENT</option><option>LEASE</option><option>DPA</option><option>OTHER</option></select></label><label>Section heading<input v-model="templateForm.sectionHeading" required maxlength="160"/></label></div>
+            <label>Section wording<textarea v-model="templateForm.sectionContent" required rows="3" maxlength="20000"/></label>
+            <label>Pin clause version (optional)<select v-model="templateForm.clauseId"><option value="">Use section wording above</option><option v-for="clause in clauses" :key="clause._id" :value="clause._id">{{ clause.title }} · v{{ clause.version }}</option></select></label>
+            <p class="field-hint">The sample template includes a required effectiveDate field. Use {{ '{{effectiveDate}}' }} in the wording.</p>
+            <button class="primary-button" type="submit" :disabled="savingTemplate">{{ savingTemplate ? "Saving…" : "Create draft template" }}</button>
+          </form>
+          <div class="definition-list"><article v-for="template in templates" :key="template._id" class="definition-row"><div class="vendor-title"><strong>{{ template.name }} · v{{ template.version }}</strong><span class="status-pill" :class="template.status.toLowerCase()">{{ template.status.replace("_", " ") }}</span></div><small>{{ template.contractType }} · {{ template.fields.length }} dynamic fields · {{ template.sections.length }} sections</small><div class="task-actions"><button v-if="template.status === 'DRAFT'" class="submit-action" @click="templateAction(template, 'submit')">Submit for approval</button><button v-if="template.status === 'PENDING_APPROVAL'" class="approve-button" @click="templateAction(template, 'approve')">Approve</button><button v-if="template.status === 'APPROVED'" class="submit-action" @click="templateAction(template, 'revisions')">New revision</button></div></article><p v-if="!templates.length" class="panel-note">No templates created yet. A different owner or administrator must approve each draft.</p></div>
+        </div>
+        <div class="panel workflow-panel template-generate">
+          <div class="panel-heading"><div><span class="eyebrow">DRAFT GENERATION</span><h2>Generate from approved template</h2></div></div>
+          <form @submit.prevent="generateFromTemplate">
+            <label>Approved template<select v-model="generationForm.templateId" required><option value="" disabled>Select approved template</option><option v-for="template in templates.filter(item => item.status === 'APPROVED')" :key="template._id" :value="template._id">{{ template.name }} · v{{ template.version }}</option></select></label>
+            <div class="form-row"><label>Contract number<input v-model="generationForm.contractNumber" required minlength="2" maxlength="60" placeholder="NDA-2026-001"/></label><label>Counterparty<input v-model="generationForm.counterparty" required minlength="2" maxlength="160" placeholder="Northstar Ltd"/></label></div>
+            <label>Effective date<input v-model="generationForm.effectiveDate" type="date" required/></label>
+            <button class="primary-button" type="submit" :disabled="!generationForm.templateId">Generate draft contract</button>
+          </form>
+          <pre v-if="generatedDraft" class="generated-draft">{{ generatedDraft }}</pre>
+          <p class="field-hint">Generated agreements remain DRAFT. Legal review is required; this does not approve, execute, or sign contracts.</p>
+        </div>
+      </section>
 
       <section class="vendor-grid">
         <div class="panel workflow-panel">

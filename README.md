@@ -4,7 +4,7 @@
 
 ContractSphere is a multi-tenant contract lifecycle management (CLM) platform for creating, reviewing, approving, executing, monitoring, and analyzing business agreements.
 
-> Status: authentication, contract repository, multi-stage approval workflows, obligations/renewals, and initial vendor intelligence are implemented. AI contract intelligence and production hardening remain in progress.
+> Status: authentication, contract repository, multi-stage approval workflows, obligations/renewals, vendor intelligence, governed templates, and versioned clause library are implemented. AI contract intelligence and production hardening remain in progress.
 
 ## Product vision
 
@@ -14,7 +14,7 @@ Give legal, procurement, finance, and business teams one secure system of record
 
 - Secure organization workspaces with tenant isolation and role-based access control.
 - Contract repository, metadata, document versions, and controlled document access.
-- Reusable templates and clause library.
+- Reusable templates and clause library with version-pinned clauses, independent approval, dynamic fields, and draft generation.
 - Configurable multi-stage approval workflows, delegation, and SLA escalation.
 - Tenant-scoped obligation tracking, renewal calendars, notice deadlines, and vendor/counterparty intelligence.
 - AI-assisted summaries, clause extraction, risk signals, and comparisons with source-grounded evidence and human review.
@@ -148,6 +148,28 @@ Vendor profiles include legal/display names, normalized aliases, category, indus
 
 Contracts can optionally link to an active vendor profile through `vendorId`. The vendor overview also matches legacy contract counterparty names and aliases for gradual adoption. All vendor and linked portfolio queries are scoped to the authenticated tenant. Vendor creation, profile changes, and risk assessments are restricted to OWNER/ADMIN.
 
+## Contract templates and clause library API
+
+All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/templates` | List tenant templates |
+| GET | `/templates/:templateId` | Read a tenant template |
+| POST | `/templates` | Create a draft template (OWNER/ADMIN) |
+| PATCH | `/templates/:templateId` | Edit a draft template (OWNER/ADMIN) |
+| POST | `/templates/:templateId/submit` | Submit a draft for independent approval |
+| POST | `/templates/:templateId/approve` | Approve a pending template; creator cannot self-approve |
+| POST | `/templates/:templateId/revisions` | Create a new draft revision from an approved template |
+| GET | `/templates/clauses` | List active tenant clauses |
+| POST | `/templates/clauses` | Create a version 1 clause (OWNER/ADMIN) |
+| PATCH | `/templates/clauses/:clauseId` | Update clause metadata or create a new wording version (OWNER/ADMIN) |
+| POST | `/templates/:templateId/generate` | Generate a DRAFT contract from an approved template |
+
+Template fields support TEXT, DATE, NUMBER, EMAIL, and CHOICE values. Content uses `{{fieldKey}}` placeholders; undeclared fields and invalid values are rejected. Template sections pin a clause version so later edits do not silently change approved wording. Templates move through DRAFT, PENDING_APPROVAL, and APPROVED; approval requires a different OWNER/ADMIN from the creator. Changes to approved templates require a new revision and approval.
+
+Generation creates a tenant-scoped DRAFT contract and stores rendered text with the source template ID/version. It does not create a PDF/DOCX file, approve, execute, or sign the contract. Generated wording requires human legal review.
+
 ## Engineering principles
 
 1. Enforce tenant scope on the server for every tenant-owned resource.
@@ -166,7 +188,7 @@ Contracts can optionally link to an active vendor profile through `vendorId`. Th
 - [x] Contract repository API, metadata, tenant-scoped search, and document versioning
 - [x] Private S3-compatible upload/download URL workflow
 - [x] Configurable multi-stage approval workflow engine with ANY/ALL approvers and decision history
-- [ ] Templates and clause library
+- [x] Governed templates, dynamic fields, versioned clause library, and draft contract generation
 - [x] Initial obligations and renewal tracking with derived notice deadlines
 - [x] Vendor/counterparty directory, contract linkage, compliance expiry visibility, and human-reviewed risk assessments\n- [ ] Automated notifications and durable scheduled jobs
 - [ ] AI-assisted contract intelligence with evidence references
