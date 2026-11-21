@@ -24,6 +24,7 @@ interface VendorItem { _id: string; legalName: string; displayName?: string; cat
 interface NotificationItem { _id: string; type: string; title: string; body: string; link?: string; readAt: string | null; createdAt: string }
 interface TemplateItem { _id: string; name: string; contractType: string; version: number; status: string; fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>; sections: Array<{ heading: string; content: string }> }
 interface ClauseItem { _id: string; key: string; title: string; category: string; body: string; version: number }
+interface IntelligenceReport { _id: string; engine: string; summary: string; findings: Array<{ key: string; title: string; category: string; severity: string; confidence: number; explanation: string; evidence: { excerpt: string; start: number; end: number } | null }>; extractedClauses: Array<{ key: string; label: string; found: boolean }>; missingTerms: string[]; riskCounts: Record<string, number>; createdAt: string }
 
 const auth = useAuthStore();
 const notifications = ref<NotificationItem[]>([]);
@@ -60,6 +61,11 @@ const generationValues = reactive<Record<string, string>>({ effectiveDate: "" })
 const clauseForm = reactive({ key: "", title: "", category: "General", body: "" });
 const generationForm = reactive({ templateId: "", contractNumber: "", counterparty: "", effectiveDate: "" });
 const generatedDraft = ref("");
+const intelligenceContractId = ref("");
+const intelligenceSource = ref("");
+const intelligenceSourceLabel = ref("Pasted contract text");
+const intelligenceReport = ref<IntelligenceReport | null>(null);
+const analyzingContract = ref(false);
 const savingTemplate = ref(false);
 const savingClause = ref(false);
 const editingClauseId = ref("");
@@ -398,6 +404,15 @@ async function downloadLatest(contract: ContractSummary) {
   }
 }
 
+async function analyzeContractText() {
+ errorMessage.value = ""; intelligenceReport.value = null; analyzingContract.value = true;
+ try {
+  const result = await api<{ report: IntelligenceReport }>(`/contracts/${intelligenceContractId.value}/intelligence/analyze`, { method: "POST", body: JSON.stringify({ sourceText: intelligenceSource.value, sourceLabel: intelligenceSourceLabel.value }) });
+  intelligenceReport.value = result.report;
+  successMessage.value = "Evidence-grounded contract review completed. Verify every finding against the source.";
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not analyze contract text."; }
+ finally { analyzingContract.value = false; }
+}
 async function signOut() {
   await auth.logout();
   contracts.value = [];
@@ -456,6 +471,30 @@ async function signOut() {
 
       <div v-if="errorMessage" class="error-message global-message" role="alert">{{ errorMessage }}</div>
       <div v-if="successMessage" class="success-message global-message" role="status">{{ successMessage }}</div>
+
+
+      <section class="panel intelligence-panel">
+        <div class="panel-heading"><div><span class="eyebrow">CONTRACT INTELLIGENCE · RULE-BASED BASELINE</span><h2>Evidence-grounded review</h2></div><span class="count-chip">Human review required</span></div>
+        <form @submit.prevent="analyzeContractText">
+          <label>Contract<select v-model="intelligenceContractId" required><option value="" disabled>Select a contract</option><option v-for="contract in contracts" :key="contract._id" :value="contract._id">{{ contract.contractNumber }} · {{ contract.title }}</option></select></label>
+          <label>Source label<input v-model="intelligenceSourceLabel" required maxlength="120"/></label>
+          <label>Paste contract text<textarea v-model="intelligenceSource" required minlength="100" maxlength="30000" rows="7" placeholder="Paste the agreement text to review (100–30,000 characters)…"></textarea></label>
+          <p class="field-hint">This baseline uses deterministic checks, not a generative AI model. The complete source text is not retained; reports store evidence excerpts and a SHA-256 fingerprint.</p>
+          <button class="primary-button" type="submit" :disabled="analyzingContract || !intelligenceContractId || intelligenceSource.trim().length < 100">{{ analyzingContract ? "Reviewing…" : "Analyze contract text" }}</button>
+        </form>
+        <div v-if="intelligenceReport" class="intelligence-results">
+          <p class="panel-note">{{ intelligenceReport.summary }}</p>
+          <div class="metric-grid"><div v-for="severity in ['CRITICAL','HIGH','MEDIUM','LOW']" :key="severity" class="metric-card"><span class="metric-label">{{ severity }} FLAGS</span><strong>{{ intelligenceReport.riskCounts[severity] ?? 0 }}</strong></div></div>
+          <h3>Review findings</h3>
+          <article v-for="finding in intelligenceReport.findings" :key="finding.key" class="definition-row">
+            <div class="vendor-title"><strong>{{ finding.title }}</strong><span class="status-pill" :class="finding.severity.toLowerCase()">{{ finding.severity }}</span></div>
+            <small>{{ finding.category }} · confidence {{ Math.round(finding.confidence * 100) }}%</small><p>{{ finding.explanation }}</p>
+            <blockquote v-if="finding.evidence" class="intelligence-evidence">“{{ finding.evidence.excerpt }}”<small>Source characters {{ finding.evidence.start }}–{{ finding.evidence.end }}</small></blockquote>
+          </article>
+          <h3>Clause coverage</h3><div class="definition-list"><div v-for="clause in intelligenceReport.extractedClauses" :key="clause.key" class="definition-row"><strong>{{ clause.label }}</strong><small>{{ clause.found ? "Detected in source" : "Not detected" }}</small></div></div>
+          <p class="field-hint">Not detected does not prove absence. Findings can be incomplete or incorrect and are not legal advice. Review the original agreement with qualified counsel.</p>
+        </div>
+      </section>
 
       <section class="workflow-grid">
         <div class="panel workflow-panel">
