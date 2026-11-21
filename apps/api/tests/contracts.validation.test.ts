@@ -21,7 +21,11 @@ describe("contract metadata validation", () => {
   it("rejects an end date earlier than the start date", () => {
     expect(createContractSchema.safeParse({ ...valid, endDate: "2025-01-01T00:00:00.000Z" }).success).toBe(false);
   });
-  it("accepts a valid vendor link and rejects malformed vendor identifiers", () => {\n    expect(createContractSchema.safeParse({ ...valid, vendorId: "64b000000000000000000001" }).success).toBe(true);\n    expect(createContractSchema.safeParse({ ...valid, vendorId: "not-an-object-id" }).success).toBe(false);\n  });\n  it("rejects invalid contract numbers", () => {
+  it("accepts a valid vendor link and rejects malformed vendor identifiers", () => {
+    expect(createContractSchema.safeParse({ ...valid, vendorId: "64b000000000000000000001" }).success).toBe(true);
+    expect(createContractSchema.safeParse({ ...valid, vendorId: "not-an-object-id" }).success).toBe(false);
+  });
+  it("rejects invalid contract numbers", () => {
     expect(createContractSchema.safeParse({ ...valid, contractNumber: "bad number!" }).success).toBe(false);
   });
   it("does not permit contract number mutation through the update schema", () => {

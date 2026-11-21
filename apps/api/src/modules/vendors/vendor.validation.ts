@@ -4,7 +4,7 @@ const contact = z.object({ name: z.string().trim().min(2).max(100), title: z.str
 const certification = z.object({ name: z.string().trim().min(2).max(120), reference: z.string().trim().max(120).optional(), expiresAt: z.string().datetime({ offset: true }).transform(v => new Date(v)).optional(), status: z.enum(["VALID", "EXPIRED", "PENDING"]).default("PENDING") }).strict();
 export const createVendorSchema = z.object({
  legalName: z.string().trim().min(2).max(180), displayName: z.string().trim().max(120).optional(),
- category: z.enum(VENDOR_CATEGORIES).default("SUPPLIER"), website: z.string().url().max(255).optional(),
+ category: z.enum(VENDOR_CATEGORIES).default("SUPPLIER"), website: z.string().url().max(255).refine(value => value.startsWith("https://") || value.startsWith("http://"), "Website must use HTTP or HTTPS.").optional(),
  industry: z.string().trim().max(100).optional(), country: z.string().trim().max(100).optional(), taxId: z.string().trim().max(100).optional(),
  aliases: z.array(z.string().trim().min(2).max(180)).max(20).default([]), tags: z.array(z.string().trim().min(1).max(32)).max(30).default([]),
  contacts: z.array(contact).max(30).default([]), certifications: z.array(certification).max(50).default([])
