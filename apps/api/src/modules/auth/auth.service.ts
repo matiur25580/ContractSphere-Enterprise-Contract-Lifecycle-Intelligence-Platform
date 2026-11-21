@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Types } from "mongoose";
+import mongoose, { Types, type ClientSession } from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../../config/env.js";
@@ -15,10 +15,12 @@ const createAccessToken = (user: { id: string; tenantId: string; role: "OWNER" |
     expiresIn: env.ACCESS_TOKEN_TTL as NonNullable<SignOptions["expiresIn"]>
   });
 
-async function createRefreshSession(userId: string, tenantId: string) {
+async function createRefreshSession(userId: string, tenantId: string, familyId = randomBytes(24).toString("hex"), session?: ClientSession) {
   const token = randomBytes(48).toString("base64url");
   const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
-  await RefreshSession.create({ userId, tenantId, tokenHash: hashToken(token), expiresAt });
+  const document = { userId, tenantId, tokenHash: hashToken(token), familyId, expiresAt };
+  if (session) await RefreshSession.create([document], { session });
+  else await RefreshSession.create(document);
   return { token, expiresAt };
 }
 
@@ -66,20 +68,63 @@ export async function login(input: { organizationSlug: string; email: string; pa
 }
 
 export async function rotateRefreshToken(token: string) {
-  const session = await RefreshSession.findOneAndUpdate(
-    { tokenHash: hashToken(token), revokedAt: null, expiresAt: { $gt: new Date() } },
-    { $set: { revokedAt: new Date() } },
-    { new: true }
-  );
-  if (!session) throw new HttpError(401, "Refresh session is invalid or expired. Please sign in again.", "INVALID_REFRESH_TOKEN");
+  const sessionHash = hashToken(token);
+  const dbSession = await mongoose.startSession();
+  let result: { accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: ReturnType<typeof publicUser> } | undefined;
+  let failure: "INVALID_REFRESH_TOKEN" | "ACCOUNT_INACTIVE" | undefined;
+  try {
+    await dbSession.withTransaction(async () => {
+      result = undefined;
+      failure = undefined;
+      const existing = await RefreshSession.findOne({ tokenHash: sessionHash }).session(dbSession);
+      const now = new Date();
+      if (!existing || existing.expiresAt <= now) {
+        failure = "INVALID_REFRESH_TOKEN";
+        return;
+      }
 
-  const [user, tenant] = await Promise.all([
-    User.findOne({ _id: session.userId, tenantId: session.tenantId, status: "active" }),
-    Tenant.findOne({ _id: session.tenantId, status: "active" })
-  ]);
-  if (!user || !tenant) throw new HttpError(401, "Account is no longer active.", "ACCOUNT_INACTIVE");
-  const refresh = await createRefreshSession(user.id, tenant.id);
-  return { accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }), refreshToken: refresh.token, refreshExpiresAt: refresh.expiresAt, user: publicUser(user, tenant) };
+      const familyId = existing.familyId ?? randomBytes(24).toString("hex");
+      if (existing.revokedAt) {
+        await RefreshSession.updateMany({ familyId }, { $set: { revokedAt: now } }, { session: dbSession });
+        failure = "INVALID_REFRESH_TOKEN";
+        return;
+      }
+
+      const consumed = await RefreshSession.findOneAndUpdate(
+        { _id: existing._id, revokedAt: null, expiresAt: { $gt: now } },
+        { $set: { revokedAt: now, familyId } },
+        { new: true, session: dbSession }
+      );
+      if (!consumed) {
+        await RefreshSession.updateMany({ familyId }, { $set: { revokedAt: now } }, { session: dbSession });
+        failure = "INVALID_REFRESH_TOKEN";
+        return;
+      }
+
+      const [user, tenant] = await Promise.all([
+        User.findOne({ _id: consumed.userId, tenantId: consumed.tenantId, status: "active" }).session(dbSession),
+        Tenant.findOne({ _id: consumed.tenantId, status: "active" }).session(dbSession)
+      ]);
+      if (!user || !tenant) {
+        await RefreshSession.updateMany({ familyId }, { $set: { revokedAt: now } }, { session: dbSession });
+        failure = "ACCOUNT_INACTIVE";
+        return;
+      }
+
+      const refresh = await createRefreshSession(user.id, tenant.id, familyId, dbSession);
+      result = {
+        accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }),
+        refreshToken: refresh.token,
+        refreshExpiresAt: refresh.expiresAt,
+        user: publicUser(user, tenant)
+      };
+    });
+    if (failure === "ACCOUNT_INACTIVE") throw new HttpError(401, "Account is no longer active.", "ACCOUNT_INACTIVE");
+    if (failure || !result) throw new HttpError(401, "Refresh session is invalid or expired. Please sign in again.", "INVALID_REFRESH_TOKEN");
+    return result;
+  } finally {
+    await dbSession.endSession();
+  }
 }
 
 export async function revokeRefreshToken(token?: string) {
