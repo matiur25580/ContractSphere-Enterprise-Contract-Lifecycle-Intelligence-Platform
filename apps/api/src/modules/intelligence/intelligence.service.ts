@@ -69,13 +69,13 @@ export async function authorizedContract(tenantId: string, userId: string, role:
 }
 export async function analyzeContract(tenantId: string, userId: string, role: string, contractId: string, sourceText: string, sourceLabel: string, engine: "RULE_BASED" | "AI_COMPATIBLE" = "RULE_BASED", jobId?: string) {
   const contract = await authorizedContract(tenantId, userId, role, contractId);
-  const result = engine === "AI_COMPATIBLE" ? await analyzeWithConfiguredAI(sourceText) : analyzeContractText(sourceText);
   const sourceFingerprint = createHash("sha256").update(sourceText.normalize("NFKC")).digest("hex");
   const reportFilter = jobId ? { tenantId: oid(tenantId), jobId: oid(jobId) } : null;
   if (reportFilter) {
     const existing = await ContractIntelligenceReport.findOne(reportFilter);
     if (existing) return existing;
   }
+  const result = engine === "AI_COMPATIBLE" ? await analyzeWithConfiguredAI(sourceText) : analyzeContractText(sourceText);
   let report;
   try {
     report = await ContractIntelligenceReport.create({
