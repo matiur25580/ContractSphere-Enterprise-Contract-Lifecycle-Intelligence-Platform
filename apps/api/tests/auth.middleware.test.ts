@@ -53,7 +53,7 @@ describe("requireAuth middleware", () => {
     ]) {
       const req = requestWithAuthorization(`Bearer ${signedToken(claims)}`);
       const next = vi.fn<NextFunction>();
-      requireAuth(req, {} as Response, next);
+      await requireAuth(req, {} as Response, next);
       expect(next.mock.calls[0]?.[0]).toMatchObject({ statusCode: 401, code: "INVALID_TOKEN" });
     }
   });
@@ -61,7 +61,7 @@ describe("requireAuth middleware", () => {
   it("rejects signed tokens with an unsupported role", async () => {
     const req = requestWithAuthorization(`Bearer ${signedToken({ ...validClaims, role: "SUPERUSER" })}`);
     const next = vi.fn<NextFunction>();
-    requireAuth(req, {} as Response, next);
+    await requireAuth(req, {} as Response, next);
     expect(next.mock.calls[0]?.[0]).toMatchObject({ statusCode: 401, code: "INVALID_TOKEN" });
   });
 
