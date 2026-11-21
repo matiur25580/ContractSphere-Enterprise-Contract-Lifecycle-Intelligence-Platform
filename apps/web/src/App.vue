@@ -59,6 +59,7 @@ const generationForm = reactive({ templateId: "", contractNumber: "", counterpar
 const generatedDraft = ref("");
 const savingTemplate = ref(false);
 const savingClause = ref(false);
+const editingClauseId = ref("");
 const workflowForm = reactive({ name: 'Standard contract review', approverUserIds: '' });
 const creatingWorkflow = ref(false);
 const selectedWorkflowId = ref('');
@@ -144,12 +145,24 @@ async function loadTemplates() {
   if (!generationForm.templateId) generationForm.templateId = templates.value.find(item => item.status === "APPROVED")?._id ?? "";
  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load templates and clauses."; }
 }
+function reviseClause(clause: ClauseItem) {
+ editingClauseId.value = clause._id;
+ Object.assign(clauseForm, { key: clause.key, title: clause.title, category: clause.category, body: clause.body });
+}
 async function createClause() {
  savingClause.value = true; errorMessage.value = "";
  try {
-  await api("/templates/clauses", { method: "POST", body: JSON.stringify(clauseForm) });
-  Object.assign(clauseForm, { key: "", title: "", category: "General", body: "" }); successMessage.value = "Clause added to the organization library."; await loadTemplates();
- } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not create clause."; } finally { savingClause.value = false; }
+  if (editingClauseId.value) {
+   await api(`/templates/clauses/${editingClauseId.value}`, { method: "PATCH", body: JSON.stringify({ title: clauseForm.title, category: clauseForm.category, body: clauseForm.body }) });
+   successMessage.value = "A new clause wording version was created.";
+  } else {
+   await api("/templates/clauses", { method: "POST", body: JSON.stringify(clauseForm) });
+   successMessage.value = "Clause added to the organization library.";
+  }
+  editingClauseId.value = "";
+  Object.assign(clauseForm, { key: "", title: "", category: "General", body: "" });
+  await loadTemplates();
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not save clause."; } finally { savingClause.value = false; }
 }
 async function createTemplate() {
  savingTemplate.value = true; errorMessage.value = "";
@@ -503,12 +516,12 @@ async function signOut() {
         <div class="panel workflow-panel">
           <div class="panel-heading"><div><span class="eyebrow">STANDARD LANGUAGE</span><h2>Clause library <span class="count-chip">{{ clauses.length }}</span></h2></div><button class="refresh-button" @click="loadTemplates">↻ Refresh</button></div>
           <form @submit.prevent="createClause">
-            <label>Clause key<input v-model="clauseForm.key" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" placeholder="limitation-of-liability"/></label>
+            <label>Clause key<input v-model="clauseForm.key" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" placeholder="limitation-of-liability" :disabled="!!editingClauseId"/></label>
             <div class="form-row"><label>Clause title<input v-model="clauseForm.title" required minlength="2" maxlength="160" placeholder="Limitation of liability"/></label><label>Category<input v-model="clauseForm.category" required maxlength="80" placeholder="Risk"/></label></div>
             <label>Reusable wording<textarea v-model="clauseForm.body" required rows="4" maxlength="20000" placeholder="Enter reusable clause language…"></textarea></label>
-            <button class="primary-button" type="submit" :disabled="savingClause">{{ savingClause ? "Saving…" : "Add clause v1" }}</button>
+            <button class="primary-button" type="submit" :disabled="savingClause">{{ savingClause ? "Saving…" : editingClauseId ? "Save new wording version" : "Add clause v1" }}</button><button v-if="editingClauseId" class="refresh-button" type="button" @click="editingClauseId = ''; Object.assign(clauseForm, { key: '', title: '', category: 'General', body: '' })">Cancel revision</button>
           </form>
-          <div class="definition-list"><article v-for="clause in clauses" :key="clause._id" class="definition-row"><strong>{{ clause.title }} <span class="count-chip">v{{ clause.version }}</span></strong><small>{{ clause.category }} · {{ clause.key }}</small><p>{{ clause.body }}</p></article><p v-if="!clauses.length" class="panel-note">Create reusable clauses to pin their wording into approved templates.</p></div>
+          <div class="definition-list"><article v-for="clause in clauses" :key="clause._id" class="definition-row"><strong>{{ clause.title }} <span class="count-chip">v{{ clause.version }}</span></strong><small>{{ clause.category }} · {{ clause.key }}</small><p>{{ clause.body }}</p><button class="refresh-button" type="button" @click="reviseClause(clause)">Create next version</button></article><p v-if="!clauses.length" class="panel-note">Create reusable clauses to pin their wording into approved templates.</p></div>
         </div>
         <div class="panel workflow-panel">
           <div class="panel-heading"><div><span class="eyebrow">GOVERNED AGREEMENTS</span><h2>Template studio <span class="count-chip">{{ templates.length }}</span></h2></div></div>
