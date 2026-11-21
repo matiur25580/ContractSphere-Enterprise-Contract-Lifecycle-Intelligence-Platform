@@ -47,6 +47,10 @@ describe("document upload validation", () => {
   it("accepts a PDF within the 25 MiB limit", () => {
     expect(uploadIntentSchema.safeParse({ filename: "agreement.pdf", contentType: "application/pdf", sizeBytes: 1024 }).success).toBe(true);
   });
+  it("rejects filename and MIME type mismatches", () => {
+    expect(uploadIntentSchema.safeParse({ filename: "agreement.exe", contentType: "application/pdf", sizeBytes: 100 }).success).toBe(false);
+    expect(uploadIntentSchema.safeParse({ filename: "agreement.docx", contentType: "application/pdf", sizeBytes: 100 }).success).toBe(false);
+  });
   it("rejects unsupported formats and oversized files", () => {
     expect(uploadIntentSchema.safeParse({ filename: "script.exe", contentType: "application/octet-stream", sizeBytes: 100 }).success).toBe(false);
     expect(uploadIntentSchema.safeParse({ filename: "large.pdf", contentType: "application/pdf", sizeBytes: 26 * 1024 * 1024 }).success).toBe(false);
