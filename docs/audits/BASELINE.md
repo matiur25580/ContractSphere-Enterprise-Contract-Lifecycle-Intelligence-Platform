@@ -359,7 +359,7 @@ This section records findings confirmed during the subsequent PR and source revi
 - CI installs from the committed lockfile using `npm ci` and runs a full `npm audit --audit-level=high`.
 - GitHub Actions references are pinned to immutable commit SHAs; Dependabot weekly update checks are enabled for npm and GitHub Actions.
 - The MongoDB transaction requirement is documented in README and `docs/operations/MONGODB.md`.
-- The dashboard screenshot workflow has been updated to use `npm ci` and the same pinned action references; its post-merge run must pass before browser screenshot automation is considered verified on this revision.
+- The dashboard screenshot workflow uses `npm ci` and pinned action references. Post-merge dashboard screenshot run [44935502507](https://github.com/matiur25580/ContractSphere-Enterprise-Contract-Lifecycle-Intelligence-Platform/actions/runs/44935502507) completed successfully on commit `b698ce4e90528c3f16edd625252ceb3c78fe77f5`.
 
 ### Not performed
 
