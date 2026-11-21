@@ -23,6 +23,7 @@ const schema = z.object({
   AI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
   AI_MODEL: z.string().trim().min(1).max(120).default("gpt-4.1-mini")
 }).superRefine((value, ctx) => {
+  const storageValues = [value.S3_BUCKET, value.S3_REGION, value.S3_ACCESS_KEY_ID, value.S3_SECRET_ACCESS_KEY];
   if (value.NODE_ENV === "production" && !process.env.JWT_ACCESS_SECRET) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["JWT_ACCESS_SECRET"], message: "JWT_ACCESS_SECRET is required in production." });
   }
@@ -44,7 +45,6 @@ const schema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["WEB_ORIGIN"], message: "WEB_ORIGIN must be a non-local HTTPS origin in production." });
     }
   }
-  const storageValues = [value.S3_BUCKET, value.S3_REGION, value.S3_ACCESS_KEY_ID, value.S3_SECRET_ACCESS_KEY];
   if (storageValues.some(Boolean) && storageValues.some(item => !item)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["S3_BUCKET"], message: "S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY must be configured together." });
   }
