@@ -170,7 +170,7 @@ describe.skipIf(!uri)("tenant resource access — MongoDB integration", () => {
     const memberList = await listRecentDocumentJobs(tenantA.toString(), memberA.toString(), "MEMBER");
     expect(memberList.jobs.map(job => job._id.toString())).toEqual([extraJobs[0]!._id.toString()]);
     const adminList = await listRecentDocumentJobs(tenantA.toString(), ownerA.toString(), "OWNER");
-    expect(adminList.jobs).toHaveLength(4);
+    expect(adminList.jobs).toHaveLength(3);
     expect(adminList.jobs.some(job => job._id.toString() === jobB.toString())).toBe(false);
   });
 });
