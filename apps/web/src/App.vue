@@ -24,7 +24,7 @@ interface VendorItem { _id: string; legalName: string; displayName?: string; cat
 interface NotificationItem { _id: string; type: string; title: string; body: string; link?: string; readAt: string | null; createdAt: string }
 interface TemplateItem { _id: string; name: string; contractType: string; version: number; status: string; fields: Array<{ key: string; label: string; type: string; required: boolean; options: string[] }>; sections: Array<{ heading: string; content: string }> }
 interface ClauseItem { _id: string; key: string; title: string; category: string; body: string; version: number }
-interface IntelligenceReport { _id: string; engine: string; summary: string; findings: Array<{ key: string; title: string; category: string; severity: string; confidence: number; explanation: string; evidence: { excerpt: string; start: number; end: number } | null }>; extractedClauses: Array<{ key: string; label: string; found: boolean }>; missingTerms: string[]; riskCounts: Record<string, number>; createdAt: string }
+interface IntelligenceReport { _id: string; engine: string; summary: string; findings: Array<{ key: string; title: string; category: string; severity: string; confidence: number; explanation: string; evidence: { excerpt: string; start: number; end: number } | null }>; extractedClauses: Array<{ key: string; label: string; found: boolean }>; missingTerms: string[]; riskCounts: Record<string, number>; createdAt: string }\ninterface ContractComparison { _id: string; baselineLabel: string; candidateLabel: string; similarityScore: number; summary: string; clauseChanges: Array<{ key: string; label: string; change: string; baselineEvidence: string | null; candidateEvidence: string | null }>; findingChanges: Array<{ key: string; title: string; change: string; baselineSeverity: string | null; candidateSeverity: string | null }>; additions: Array<{ excerpt: string }>; removals: Array<{ excerpt: string }>; createdAt: string }
 
 const auth = useAuthStore();
 const notifications = ref<NotificationItem[]>([]);
@@ -64,7 +64,7 @@ const generatedDraft = ref("");
 const intelligenceContractId = ref("");
 const intelligenceSource = ref("");
 const intelligenceSourceLabel = ref("Pasted contract text");
-const intelligenceEngine = ref<"RULE_BASED" | "AI_COMPATIBLE">("RULE_BASED");
+const intelligenceEngine = ref<"RULE_BASED" | "AI_COMPATIBLE">("RULE_BASED");\nconst comparisonBaseline = ref("");\nconst comparisonCandidate = ref("");\nconst comparisonResult = ref<ContractComparison | null>(null);\nconst comparingContract = ref(false);
 const intelligenceReport = ref<IntelligenceReport | null>(null);
 const analyzingContract = ref(false);
 const savingTemplate = ref(false);
@@ -425,7 +425,20 @@ async function analyzeContractText() {
  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not analyze contract text."; }
  finally { analyzingContract.value = false; }
 }
-async function signOut() {
+
+async function compareContractVersions() {
+ errorMessage.value = ""; comparisonResult.value = null; comparingContract.value = true;
+ try {
+  const result = await api<{ comparison: ContractComparison }>(`/contracts/${intelligenceContractId.value}/intelligence/compare`, {
+   method: "POST",
+   body: JSON.stringify({ baselineText: comparisonBaseline.value, candidateText: comparisonCandidate.value, baselineLabel: "Earlier version", candidateLabel: "Proposed version" })
+  });
+  comparisonResult.value = result.comparison;
+  successMessage.value = "Version comparison completed. Review every detected change before accepting amendments.";
+ } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not compare these contract versions."; }
+ finally { comparingContract.value = false; }
+}
+\nasync function signOut() {
   await auth.logout();
   contracts.value = [];
   notifications.value = [];
@@ -496,6 +509,30 @@ async function signOut() {
           <p class="field-hint">This baseline uses deterministic checks, not a generative AI model. The complete source text is not retained; reports store evidence excerpts and a SHA-256 fingerprint.</p>
           <div class="form-row"><button class="primary-button" type="submit" :disabled="analyzingContract || !intelligenceContractId || intelligenceSource.trim().length < 100">{{ analyzingContract ? "Reviewing…" : "Analyze pasted text" }}</button><button class="refresh-button" type="button" :disabled="analyzingContract || !contracts.find(item => item._id === intelligenceContractId)?.latestDocumentId" @click="analyzeLatestDocument">Analyze latest PDF/DOCX</button></div>
         </form>
+        
+        <div class="comparison-workspace">
+          <div class="panel-heading"><div><span class="eyebrow">NEGOTIATION INTELLIGENCE</span><h2>Compare contract versions</h2></div><span class="count-chip">Evidence-led change review</span></div>
+          <form @submit.prevent="compareContractVersions">
+            <label>Earlier / baseline version<textarea v-model="comparisonBaseline" required minlength="100" maxlength="30000" rows="5" placeholder="Paste the earlier agreement text…"></textarea></label>
+            <label>Proposed / candidate version<textarea v-model="comparisonCandidate" required minlength="100" maxlength="30000" rows="5" placeholder="Paste the proposed agreement text…"></textarea></label>
+            <button class="primary-button" type="submit" :disabled="comparingContract || !intelligenceContractId || comparisonBaseline.trim().length < 100 || comparisonCandidate.trim().length < 100">{{ comparingContract ? "Comparing versions…" : "Compare versions and assess risk changes" }}</button>
+          </form>
+          <p class="field-hint">Comparison uses deterministic sentence and clause matching. It highlights review candidates, not legally validated redlines. Text is not retained; only fingerprints and limited excerpts are saved.</p>
+          <div v-if="comparisonResult" class="comparison-results">
+            <div class="metric-grid">
+              <div class="metric-card"><span class="metric-label">TEXT SIMILARITY</span><strong>{{ comparisonResult.similarityScore }}%</strong><small>Sentence-set overlap indicator</small></div>
+              <div class="metric-card"><span class="metric-label">CLAUSES ADDED</span><strong>{{ comparisonResult.clauseChanges.filter(item => item.change === 'ADDED').length }}</strong><small>Newly detected categories</small></div>
+              <div class="metric-card"><span class="metric-label">CLAUSES REMOVED</span><strong>{{ comparisonResult.clauseChanges.filter(item => item.change === 'REMOVED').length }}</strong><small>Previously detected categories</small></div>
+              <div class="metric-card"><span class="metric-label">RISK CHANGES</span><strong>{{ comparisonResult.findingChanges.length }}</strong><small>New, resolved or changed flags</small></div>
+            </div>
+            <p class="panel-note">{{ comparisonResult.summary }}</p>
+            <h3>Clause-level changes</h3>
+            <div class="definition-list"><article v-for="item in comparisonResult.clauseChanges.filter(change => change.change !== 'UNCHANGED')" :key="item.key" class="definition-row"><div class="vendor-title"><strong>{{ item.label }}</strong><span class="status-pill" :class="item.change.toLowerCase()">{{ item.change }}</span></div><small v-if="item.baselineEvidence">Earlier: {{ item.baselineEvidence }}</small><small v-if="item.candidateEvidence">Proposed: {{ item.candidateEvidence }}</small></article><p v-if="!comparisonResult.clauseChanges.some(item => item.change !== 'UNCHANGED')" class="panel-note">No clause category changes detected.</p></div>
+            <h3>Risk movement</h3>
+            <div class="definition-list"><article v-for="item in comparisonResult.findingChanges" :key="item.key" class="definition-row"><div class="vendor-title"><strong>{{ item.title }}</strong><span class="status-pill" :class="item.change.toLowerCase()">{{ item.change }}</span></div><small>Earlier: {{ item.baselineSeverity || '—' }} · Proposed: {{ item.candidateSeverity || '—' }}</small></article><p v-if="!comparisonResult.findingChanges.length" class="panel-note">No changes to the detected risk flags.</p></div>
+            <div class="form-row"><div><h3>Detected additions</h3><article v-for="(item, index) in comparisonResult.additions" :key="'add-' + index" class="change-excerpt">{{ item.excerpt }}</article></div><div><h3>Detected removals</h3><article v-for="(item, index) in comparisonResult.removals" :key="'remove-' + index" class="change-excerpt removed">{{ item.excerpt }}</article></div></div>
+          </div>
+        </div>
         <div v-if="intelligenceReport" class="intelligence-results">
           <p class="panel-note">{{ intelligenceReport.summary }}</p>
           <div class="metric-grid"><div v-for="severity in ['CRITICAL','HIGH','MEDIUM','LOW']" :key="severity" class="metric-card"><span class="metric-label">{{ severity }} FLAGS</span><strong>{{ intelligenceReport.riskCounts[severity] ?? 0 }}</strong></div></div>
