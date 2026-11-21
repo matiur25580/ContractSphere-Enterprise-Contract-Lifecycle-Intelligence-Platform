@@ -91,7 +91,7 @@ async function main() {
    ["01-executive-workspace.png",".workspace-heading"],
    ["02-contract-portfolio.png",".workspace > .metric-grid:not(.lifecycle-metrics)"],
    ["03-lifecycle-performance.png",".lifecycle-metrics"],
-   ["04-ai-contract-review.png",".intelligence-panel"],
+   ["04-evidence-grounded-contract-review.png",".intelligence-panel"],
    ["05-version-comparison.png",".comparison-workspace"],
    ["06-approval-governance.png",".workflow-grid"],
    ["07-obligation-management.png",".obligation-grid .workflow-panel:first-child"],

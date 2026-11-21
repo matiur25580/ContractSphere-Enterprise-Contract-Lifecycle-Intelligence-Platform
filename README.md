@@ -442,10 +442,10 @@ A commitment-focused view of open obligations, overdue items, notice deadlines a
 
 ![Lifecycle performance metrics](docs/screenshots/03-lifecycle-performance.png)
 
-### 04 — AI-assisted contract review
-The evidence-led intelligence workspace, showing review findings, severity, confidence and source excerpts. The showcase report is synthetic and demonstrates the interface, not a legal conclusion.
+### 04 — Evidence-grounded contract review
+The evidence-led intelligence workspace, showing deterministic review findings, severity, confidence and source excerpts. The showcase report is synthetic and demonstrates the interface, not a legal conclusion.
 
-![AI-assisted contract review](docs/screenshots/04-ai-contract-review.png)
+![Evidence-grounded contract review](docs/screenshots/04-evidence-grounded-contract-review.png)
 
 ### 05 — Contract version comparison
 A negotiation-review surface for clause changes, risk movement, additions and removals between an earlier and proposed agreement.
