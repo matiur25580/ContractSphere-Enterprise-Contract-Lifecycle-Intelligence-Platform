@@ -1,6 +1,7 @@
 import {app} from "./app.js";
 import {connectDatabase,disconnectDatabase} from "./config/database.js";
 import {env} from "./config/env.js";
+import { startDocumentJobWorker, stopDocumentJobWorker } from "./modules/intelligence/document-job.service.js";
 
 try {
   await connectDatabase();
@@ -9,12 +10,15 @@ try {
   process.exit(1);
 }
 
-const server=app.listen(env.PORT,()=>console.info(`ContractSphere API listening on http://localhost:${env.PORT}`));
+const server=app.listen(env.PORT,()=>{
+  console.info(`ContractSphere API listening on http://localhost:${env.PORT}`);
+  if (env.MONGODB_URI) startDocumentJobWorker();
+});
 const shutdown=(signal:string)=>{
   console.info(`${signal} received; closing services.`);
   server.close(async error=>{
     if(error){console.error("HTTP shutdown failed:",error);process.exit(1);}
-    try { await disconnectDatabase(); process.exit(0); }
+    try { await stopDocumentJobWorker(); await disconnectDatabase(); process.exit(0); }
     catch(disconnectError){console.error("Database shutdown failed:",disconnectError);process.exit(1);}
   });
 };
