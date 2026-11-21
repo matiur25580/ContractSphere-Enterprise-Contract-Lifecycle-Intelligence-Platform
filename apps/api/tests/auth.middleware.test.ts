@@ -68,7 +68,7 @@ describe("requireAuth middleware", () => {
   it("attaches current database identity and tenant claims", async () => {
     const req = requestWithAuthorization(`Bearer ${signedToken(validClaims)}`);
     const next = vi.fn<NextFunction>();
-    requireAuth(req, {} as Response, next);
+    await requireAuth(req, {} as Response, next);
     expect(next).toHaveBeenCalledWith();
     expect(req.auth).toEqual({
       userId: validClaims.sub,
