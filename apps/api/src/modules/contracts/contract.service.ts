@@ -144,8 +144,15 @@ export async function completeDocumentUpload(tenantId: string, userId: string, u
     await ContractFile.deleteOne({ _id: file._id });
     throw new HttpError(409, "A new document version was added concurrently. Please retry the upload completion.", "VERSION_CONFLICT");
   }
+  let job;
+  try {
+    job = await enqueueDocumentAnalysis({ tenantId, contractId: intent.contractId.toString(), fileId: file.id, userId, role });
+  } catch (error) {
+    await Contract.findOneAndUpdate({ _id: contract._id, tenantId: tenant, latestVersion: version, latestDocumentId: file._id }, { $set: { latestVersion: contract.latestVersion, latestDocumentId: contract.latestDocumentId ?? null } });
+    await ContractFile.deleteOne({ _id: file._id });
+    throw error;
+  }
   await UploadIntent.updateOne({ _id: intent._id, completedAt: null }, { $set: { completedAt: new Date() } });
-  const job = await enqueueDocumentAnalysis({ tenantId, contractId: intent.contractId.toString(), fileId: file.id, userId, role });
   return { file, job };
 }
 
