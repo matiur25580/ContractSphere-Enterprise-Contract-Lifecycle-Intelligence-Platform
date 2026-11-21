@@ -12,7 +12,7 @@ const hashToken = (token: string) => createHash("sha256").update(token).digest("
 const createAccessToken = (user: { id: string; tenantId: string; role: "OWNER" | "ADMIN" | "MEMBER" }) =>
   jwt.sign({ tenantId: user.tenantId, role: user.role }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
-    expiresIn: env.ACCESS_TOKEN_TTL as SignOptions["expiresIn"]
+    expiresIn: env.ACCESS_TOKEN_TTL as NonNullable<SignOptions["expiresIn"]>
   });
 
 async function createRefreshSession(userId: string, tenantId: string) {
