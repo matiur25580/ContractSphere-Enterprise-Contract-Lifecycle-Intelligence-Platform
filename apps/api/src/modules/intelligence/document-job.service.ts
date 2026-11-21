@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Types } from "mongoose";
+import { Types, type ClientSession } from "mongoose";
 import { HttpError } from "../../common/http-error.js";
 import { Contract } from "../contracts/contract.model.js";
 import { ContractFile } from "../contracts/contract-file.model.js";
@@ -16,17 +16,22 @@ const workerId = randomUUID();
 
 export async function enqueueDocumentAnalysis(input: {
   tenantId: string; contractId: string; fileId: string; userId: string; role: string;
-}) {
-  const [contract, file] = await Promise.all([
-    Contract.findOne({ _id: input.contractId, tenantId: oid(input.tenantId) }).select("_id").lean(),
-    ContractFile.findOne({ _id: input.fileId, contractId: oid(input.contractId), tenantId: oid(input.tenantId) }).select("_id").lean()
-  ]);
+}, session?: ClientSession) {
+  const contractQuery = Contract.findOne({ _id: input.contractId, tenantId: oid(input.tenantId) }).select("_id").lean();
+  const fileQuery = ContractFile.findOne({ _id: input.fileId, contractId: oid(input.contractId), tenantId: oid(input.tenantId) }).select("_id").lean();
+  if (session) {
+    contractQuery.session(session);
+    fileQuery.session(session);
+  }
+  const [contract, file] = await Promise.all([contractQuery, fileQuery]);
   if (!contract || !file) throw new HttpError(404, "Contract document not found for background processing.", "DOCUMENT_NOT_FOUND");
-  return DocumentProcessingJob.create({
+  const [job] = await DocumentProcessingJob.create([{
     tenantId: oid(input.tenantId), contractId: contract._id, fileId: file._id,
     requestedBy: oid(input.userId), role: input.role, engine: "RULE_BASED",
     status: "QUEUED", attempts: 0, maxAttempts: 3, nextRunAt: new Date()
-  });
+  }], session ? { session } : {});
+  if (!job) throw new HttpError(500, "Document analysis job could not be queued.", "DOCUMENT_JOB_CREATE_FAILED");
+  return job;
 }
 
 export async function getDocumentAnalysisJob(tenantId: string, userId: string, role: string, contractId: string, jobId: string) {

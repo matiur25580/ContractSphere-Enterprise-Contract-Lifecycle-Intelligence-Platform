@@ -10,6 +10,8 @@ export interface UploadIntentDocument {
   sizeBytes: number;
   expiresAt: Date;
   completedAt?: Date;
+  processingAt?: Date;
+  processingBy?: string;
   quarantinedAt?: Date;
   scanStatus?: "CLEAN" | "INFECTED" | "REJECTED" | "ERROR";
   scanResult?: string;
@@ -24,6 +26,8 @@ const schema = new Schema<UploadIntentDocument>({
   sizeBytes: { type: Number, required: true },
   expiresAt: { type: Date, required: true, expires: 0 },
   completedAt: Date,
+  processingAt: Date,
+  processingBy: { type: String, maxlength: 80 },
   quarantinedAt: Date,
   scanStatus: { type: String, enum: ["CLEAN", "INFECTED", "REJECTED", "ERROR"] },
   scanResult: { type: String, maxlength: 240 }
