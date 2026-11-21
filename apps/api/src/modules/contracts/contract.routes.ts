@@ -50,9 +50,9 @@ contractRouter.post("/:contractId/uploads", validate(uploadIntentSchema), asyncH
   res.status(201).json({ success: true, data: { upload } });
 }));
 contractRouter.post("/uploads/:uploadId/complete", asyncHandler(async (req, res) => {
-  const file = await completeDocumentUpload(req.auth!.tenantId, req.auth!.userId, idParam(req, "uploadId"));
-  await audit(req, "DOCUMENT_VERSION_ADDED", file.contractId.toString(), `Added document version ${file.version}`, { version: file.version, sizeBytes: file.sizeBytes });
-  res.status(201).json({ success: true, data: { file } });
+  const result = await completeDocumentUpload(req.auth!.tenantId, req.auth!.userId, idParam(req, "uploadId"), req.auth!.role);
+  await audit(req, "DOCUMENT_VERSION_ADDED", result.file.contractId.toString(), `Added document version ${result.file.version}`, { version: result.file.version, sizeBytes: result.file.sizeBytes });
+  res.status(201).json({ success: true, data: { file: result.file, processingJob: { id: result.job.id, status: result.job.status } } });
 }));
 contractRouter.get("/:contractId/versions/:fileId/download", asyncHandler(async (req, res) => {
   const result = await getDocumentDownloadUrl(req.auth!.tenantId, idParam(req, "contractId"), idParam(req, "fileId"));
