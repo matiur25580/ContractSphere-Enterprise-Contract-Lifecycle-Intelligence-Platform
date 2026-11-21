@@ -37,7 +37,7 @@ export function analyzeContractText(sourceText: string) {
     return { key: clause.key, label: clause.label, found: Boolean(evidence), evidence };
   });
   const add = (finding: IntelligenceFinding) => findings.push(finding);
-  const uncapped = evidenceFor(text, /\b(unlimited liability|liability\\s+(?:is\\s+)?unlimited|unlimited damages|without limitation of liability)\b/i);
+  const uncapped = evidenceFor(text, /\b(unlimited liability|liability\s+(?:is\s+)?unlimited|unlimited damages|without limitation of liability)\b/i);
   if (uncapped) add({ key: "uncapped_liability", category: "LIABILITY", title: "Potential uncapped liability", severity: "CRITICAL", confidence: 0.96, explanation: "The text expressly refers to unlimited liability or damages. Confirm whether this is intended and whether exclusions or caps apply elsewhere.", evidence: uncapped });
   const broadIndemnity = evidenceFor(text, /\b(indemnif(?:y|ies|ication))\b[^.]{0,180}\b(all claims|any and all|regardless of fault|including negligence)\b/i);
   if (broadIndemnity) add({ key: "broad_indemnity", category: "INDEMNITY", title: "Broad indemnity wording", severity: "HIGH", confidence: 0.82, explanation: "The indemnity language appears broad. Review scope, causation, third-party claims, procedures and negligence carve-outs.", evidence: broadIndemnity });
