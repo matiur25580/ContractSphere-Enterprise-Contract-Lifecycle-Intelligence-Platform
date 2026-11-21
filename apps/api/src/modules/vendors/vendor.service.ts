@@ -43,7 +43,7 @@ export async function assessVendor(tenantId: string, userId: string, vendorId: s
 export async function getVendorOverview(tenantId: string, vendorId: string) {
  const tenant = oid(tenantId), vendor = await Vendor.findOne({ _id: vendorId, tenantId: tenant }).lean();
  if (!vendor) throw new HttpError(404, "Vendor not found.", "VENDOR_NOT_FOUND");
- const names = [vendor.legalName, vendor.displayName, ...vendor.aliases].filter(Boolean).map((name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+ const names = [vendor.legalName, vendor.displayName, ...vendor.aliases].filter((name): name is string => typeof name === "string" && name.length > 0).map(name => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
  const contracts = await Contract.find({ tenantId: tenant, $or: [{ vendorId: vendor._id }, { counterparty: { $in: names.map(name => new RegExp("^" + name + "$", "i")) } }] }).select("_id title contractNumber type status contractValue currency endDate").lean();
  const contractIds = contracts.map(c => c._id);
  const [obligations, renewals] = await Promise.all([

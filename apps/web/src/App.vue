@@ -38,7 +38,11 @@ const renewalSummary = ref({ upcoming: 0, noticeDue: 0, inProgress: 0, expired: 
 const obligationForm = reactive({ contractId: "", title: "", type: "DELIVERABLE", priority: "MEDIUM", dueDate: "", description: "" });
 const renewalForm = reactive({ contractId: "", expiryDate: "", noticePeriodDays: 30, renewalType: "MANUAL", notes: "" });
 const savingObligation = ref(false);
-const savingRenewal = ref(false);\nconst vendors = ref<VendorItem[]>([]);\nconst vendorForm = reactive({ legalName: "", displayName: "", category: "SUPPLIER", industry: "", country: "", website: "", contactName: "", contactEmail: "" });\nconst vendorAssessment = reactive({ vendorId: "", score: 20, factors: "" });\nconst savingVendor = ref(false);
+const savingRenewal = ref(false);
+const vendors = ref<VendorItem[]>([]);
+const vendorForm = reactive({ legalName: "", displayName: "", category: "SUPPLIER", industry: "", country: "", website: "", contactName: "", contactEmail: "" });
+const vendorAssessment = reactive({ vendorId: "", score: 20, factors: "" });
+const savingVendor = ref(false);
 const workflowForm = reactive({ name: 'Standard contract review', approverUserIds: '' });
 const creatingWorkflow = ref(false);
 const selectedWorkflowId = ref('');
@@ -190,7 +194,8 @@ async function createContract() {
       body: JSON.stringify({
         ...contractForm,
         contractValue: contractForm.contractValue ? Number(contractForm.contractValue) : undefined,
-        vendorId: contractForm.vendorId || undefined,\n        tags: []
+        vendorId: contractForm.vendorId || undefined,
+        tags: []
       })
     });
     Object.assign(contractForm, { title: "", contractNumber: "", type: "MSA", counterparty: "", vendorId: "", currency: "USD", contractValue: "" });
