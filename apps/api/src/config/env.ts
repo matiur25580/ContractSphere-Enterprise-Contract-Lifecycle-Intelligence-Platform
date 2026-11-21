@@ -16,12 +16,18 @@ const schema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
   S3_ENDPOINT: z.string().url().optional(),
+  CLAMAV_HOST: z.string().trim().min(1).optional(),
+  CLAMAV_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+  CLAMAV_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
   AI_API_KEY: z.string().min(1).optional(),
   AI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
   AI_MODEL: z.string().trim().min(1).max(120).default("gpt-4.1-mini")
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === "production" && !process.env.JWT_ACCESS_SECRET) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["JWT_ACCESS_SECRET"], message: "JWT_ACCESS_SECRET is required in production." });
+  }
+  if (value.NODE_ENV === "production" && !value.CLAMAV_HOST) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["CLAMAV_HOST"], message: "CLAMAV_HOST is required in production so uploads are malware-scanned." });
   }
   if (value.NODE_ENV === "production" && !value.MONGODB_URI) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["MONGODB_URI"], message: "MONGODB_URI is required in production." });
