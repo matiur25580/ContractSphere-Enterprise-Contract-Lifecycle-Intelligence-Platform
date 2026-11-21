@@ -32,6 +32,12 @@ const schema = z.object({
   if (value.NODE_ENV === "production" && !value.MONGODB_URI) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["MONGODB_URI"], message: "MONGODB_URI is required in production." });
   }
+  if (value.NODE_ENV === "production" && storageValues.some(item => !item)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["S3_BUCKET"], message: "S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY are required in production." });
+  }
+  if (value.NODE_ENV === "production" && value.S3_ENDPOINT && new URL(value.S3_ENDPOINT).protocol !== "https:") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["S3_ENDPOINT"], message: "S3_ENDPOINT must use HTTPS in production." });
+  }
   if (value.NODE_ENV === "production") {
     const webOrigin = new URL(value.WEB_ORIGIN);
     if (webOrigin.protocol !== "https:" || ["localhost", "127.0.0.1", "::1"].includes(webOrigin.hostname)) {
