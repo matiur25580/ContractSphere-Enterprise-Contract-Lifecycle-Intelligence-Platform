@@ -9,8 +9,8 @@ import { User } from "../users/user.model.js";
 import { RefreshSession } from "./refresh-session.model.js";
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
-const createAccessToken = (user: { id: string; tenantId: string; role: "OWNER" | "ADMIN" | "MEMBER" }) =>
-  jwt.sign({ tenantId: user.tenantId, role: user.role }, env.JWT_ACCESS_SECRET, {
+const createAccessToken = (user: { id: string; tenantId: string; role: "OWNER" | "ADMIN" | "MEMBER" }, familyId: string) =>
+  jwt.sign({ tenantId: user.tenantId, role: user.role, familyId }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
     expiresIn: env.ACCESS_TOKEN_TTL as NonNullable<SignOptions["expiresIn"]>
   });
@@ -21,7 +21,7 @@ async function createRefreshSession(userId: string, tenantId: string, familyId =
   const document = { userId, tenantId, tokenHash: hashToken(token), familyId, expiresAt };
   if (session) await RefreshSession.create([document], { session });
   else await RefreshSession.create(document);
-  return { token, expiresAt };
+  return { token, expiresAt, familyId };
 }
 
 function publicUser(user: { _id: Types.ObjectId; name: string; email: string; role: string }, tenant: { _id: Types.ObjectId; name: string; slug: string }) {
@@ -45,7 +45,7 @@ export async function register(input: { organizationName: string; organizationSl
     const user = await User.create({ tenantId: tenant._id, name: input.name, email: input.email, passwordHash, role: "OWNER" });
     createdUserId = user.id;
     const refresh = await createRefreshSession(user.id, tenant.id);
-    return { accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }), refreshToken: refresh.token, refreshExpiresAt: refresh.expiresAt, user: publicUser(user, tenant) };
+    return { accessToken: createAccessToken({ id: user.id, tenantId: tenant.id, role: user.role }, refresh.familyId), refreshToken: refresh.token, refreshExpiresAt: refresh.expiresAt, user: publicUser(user, tenant) };
   } catch (error) {
     if (createdUserId) await User.deleteOne({ _id: createdUserId });
     await Tenant.deleteOne({ _id: tenant._id });
@@ -129,7 +129,14 @@ export async function rotateRefreshToken(token: string) {
 
 export async function revokeRefreshToken(token?: string) {
   if (!token) return;
-  await RefreshSession.updateOne({ tokenHash: hashToken(token), revokedAt: null }, { $set: { revokedAt: new Date() } });
+  const session = await RefreshSession.findOne({ tokenHash: hashToken(token), revokedAt: null }).select("familyId").lean();
+  if (!session) return;
+  const revokedAt = new Date();
+  if (session.familyId) {
+    await RefreshSession.updateMany({ familyId: session.familyId, revokedAt: null }, { $set: { revokedAt } });
+  } else {
+    await RefreshSession.updateOne({ tokenHash: hashToken(token), revokedAt: null }, { $set: { revokedAt } });
+  }
 }
 
 export async function getCurrentUser(userId: string, tenantId: string) {
