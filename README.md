@@ -194,3 +194,19 @@ Do not open public issues containing credentials, personal data, confidential co
 ## License
 
 License to be selected before public distribution. Until then, all rights are reserved.
+
+
+## Audit trail and in-app notifications
+
+All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/audit-events` | Search tenant audit history (OWNER/ADMIN) |
+| GET | `/notifications` | List the signed-in user's notifications and unread count |
+| PATCH | `/notifications/:notificationId/read` | Mark one notification read |
+| PATCH | `/notifications/read-all` | Mark all of the signed-in user's notifications read |
+
+Audit events are written for contract creation/updates, document upload activity, workflow definition/submission/decisions, obligation and renewal changes, and vendor profile/risk changes. Audit reads are tenant-scoped and restricted to OWNER/ADMIN. The API exposes no audit update/delete routes; this is application-level append-only behavior, not a claim of database-level immutability. Production deployments should use a dedicated database role that denies update/delete on the audit collection, backups, retention controls, and optionally tamper-evident hash chaining or WORM storage.
+
+Notifications are private to the recipient and tenant. Submitting a contract for approval creates deduplicated in-app notifications for assigned approvers. Notification read state is updated only by the owning user. Email delivery, push delivery, scheduled reminders, and a durable job queue are not included in this milestone; they require delivery-provider and worker infrastructure.

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { asyncHandler } from "../../common/async-handler.js";
 import { HttpError } from "../../common/http-error.js";
 import { requireAuth } from "../auth/auth.middleware.js";
+import { recordAuditEvent } from "../audit/audit.service.js";
 import { createObligation, listObligations, updateObligation, listRenewals, upsertRenewal, changeRenewalStatus } from "./obligation.service.js";
 import { createObligationSchema, updateObligationSchema, listObligationsSchema, upsertRenewalSchema, updateRenewalStatusSchema } from "./obligation.validation.js";
 
@@ -24,9 +25,11 @@ const idParam = (req: Request, key: string) => {
   return value;
 };
 const renewalQuerySchema = z.object({ status: z.enum(["UPCOMING", "NOTICE_DUE", "RENEWAL_IN_PROGRESS", "RENEWED", "TERMINATED", "EXPIRED"]).optional(), page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(20) });
+const audit = (req: Request, action: string, resourceType: string, resourceId: string, summary: string) => recordAuditEvent({ tenantId: req.auth!.tenantId, actorId: req.auth!.userId, action, resourceType, resourceId, summary, requestId: req.header("x-request-id") });
 
 obligationRouter.post("/", validateBody(createObligationSchema), asyncHandler(async (req, res) => {
   const obligation = await createObligation(req.auth!.tenantId, req.auth!.userId, req.auth!.role, req.body);
+  await audit(req, "OBLIGATION_CREATED", "OBLIGATION", obligation.id, "Created contract obligation");
   res.status(201).json({ success: true, data: { obligation } });
 }));
 obligationRouter.get("/", validateQuery(listObligationsSchema), asyncHandler(async (req, res) => {
@@ -35,6 +38,7 @@ obligationRouter.get("/", validateQuery(listObligationsSchema), asyncHandler(asy
 }));
 obligationRouter.patch("/:obligationId", validateBody(updateObligationSchema), asyncHandler(async (req, res) => {
   const obligation = await updateObligation(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "obligationId"), req.body);
+  await audit(req, "OBLIGATION_UPDATED", "OBLIGATION", obligation.id, "Updated obligation status or details");
   res.json({ success: true, data: { obligation } });
 }));
 obligationRouter.get("/renewals", validateQuery(renewalQuerySchema), asyncHandler(async (req, res) => {
@@ -43,9 +47,11 @@ obligationRouter.get("/renewals", validateQuery(renewalQuerySchema), asyncHandle
 }));
 obligationRouter.put("/renewals/:contractId", validateBody(upsertRenewalSchema), asyncHandler(async (req, res) => {
   const renewal = await upsertRenewal(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "contractId"), req.body);
+  await audit(req, "RENEWAL_SCHEDULED", "RENEWAL", renewal.id, "Created or updated a renewal schedule");
   res.status(200).json({ success: true, data: { renewal } });
 }));
 obligationRouter.patch("/renewals/:renewalId/status", validateBody(updateRenewalStatusSchema), asyncHandler(async (req, res) => {
   const renewal = await changeRenewalStatus(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "renewalId"), req.body.status);
+  await audit(req, "RENEWAL_STATUS_CHANGED", "RENEWAL", renewal.id, `Changed renewal status to ${req.body.status}`);
   res.json({ success: true, data: { renewal } });
 }));
