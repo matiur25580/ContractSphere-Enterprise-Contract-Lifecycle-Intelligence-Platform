@@ -106,7 +106,8 @@ async function main() {
   const selectedContract = await page.locator(".intelligence-panel select").first().inputValue();
   const sourceLength = await page.locator(".intelligence-panel form textarea").first().inputValue().then(value => value.trim().length);
   const submitDisabled = await page.locator(".intelligence-panel form button[type=submit]").first().isDisabled();
-  process.stdout.write(`Showcase debug: contract=${selectedContract}, sourceLength=${sourceLength}, submitDisabled=${submitDisabled}\\n`);
+  const reactiveDebug = await page.evaluate(() => { const state = document.querySelector("#app")?.__vue_app__?._instance?.setupState; return { contractId: state?.intelligenceContractId, sourceLength: state?.intelligenceSource?.trim?.().length, sourceLabel: state?.intelligenceSourceLabel, analyzing: state?.analyzingContract, buttonDisabled: document.querySelector(".intelligence-panel form button[type=submit]")?.disabled }; });
+  process.stdout.write(`Showcase debug: contract=${selectedContract}, sourceLength=${sourceLength}, submitDisabled=${submitDisabled}, reactive=${JSON.stringify(reactiveDebug)}\\n`);
   await page.waitForFunction(() => { const button = document.querySelector(".intelligence-panel form button[type=submit]"); return button instanceof HTMLButtonElement && !button.disabled; }, null, { timeout:10000 });
   await page.locator(".intelligence-panel form button[type=submit]").first().click();
   await page.waitForSelector(".intelligence-results");
