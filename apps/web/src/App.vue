@@ -33,6 +33,7 @@ const workflowDefinitions = ref<WorkflowDefinition[]>([]);
 const approvalTasks = ref<ApprovalTask[]>([]);
 const obligations = ref<ObligationItem[]>([]);
 const renewals = ref<RenewalItem[]>([]);
+const renewalSummary = ref({ upcoming: 0, noticeDue: 0, inProgress: 0, expired: 0 });
 const obligationForm = reactive({ contractId: "", title: "", type: "DELIVERABLE", priority: "MEDIUM", dueDate: "", description: "" });
 const renewalForm = reactive({ contractId: "", expiryDate: "", noticePeriodDays: 30, renewalType: "MANUAL", notes: "" });
 const savingObligation = ref(false);
@@ -75,6 +76,7 @@ async function loadObligationsAndRenewals() {
     ]);
     obligations.value = obligationResult.items;
     renewals.value = renewalResult.items;
+    renewalSummary.value = renewalResult.summary;
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load obligations and renewals."; }
 }
 
@@ -105,6 +107,13 @@ async function setObligationStatus(item: ObligationItem, status: "COMPLETED" | "
     await api(`/obligations/${item._id}`, { method: "PATCH", body: JSON.stringify({ status }) });
     await loadObligationsAndRenewals();
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not update obligation."; }
+}
+
+async function updateRenewalStatus(item: RenewalItem, status: "RENEWAL_IN_PROGRESS" | "RENEWED" | "TERMINATED") {
+  try {
+    await api(`/obligations/renewals/${item._id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+    await loadObligationsAndRenewals();
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not update renewal status."; }
 }
 
 async function loadContracts() {
@@ -273,6 +282,13 @@ async function signOut() {
         <div class="metric-card"><span class="metric-label">DOCUMENT VERSIONS</span><strong>{{ contracts.reduce((sum, item) => sum + item.latestVersion, 0) }}</strong><small>Latest version count</small></div>
       </div>
 
+      <div class="metric-grid lifecycle-metrics">
+        <div class="metric-card"><span class="metric-label">OPEN OBLIGATIONS</span><strong>{{ obligations.filter(item => !['COMPLETED', 'CANCELLED'].includes(item.status)).length }}</strong><small>Tracked commitments</small></div>
+        <div class="metric-card"><span class="metric-label">OVERDUE OBLIGATIONS</span><strong>{{ obligations.filter(item => item.status === 'OVERDUE').length }}</strong><small>Past-due commitments</small></div>
+        <div class="metric-card"><span class="metric-label">NOTICE DEADLINES</span><strong>{{ renewalSummary.noticeDue }}</strong><small>Renewal action required</small></div>
+        <div class="metric-card"><span class="metric-label">RENEWALS IN PROGRESS</span><strong>{{ renewalSummary.inProgress }}</strong><small>Active renewal work</small></div>
+      </div>
+
       <div v-if="errorMessage" class="error-message global-message" role="alert">{{ errorMessage }}</div>
       <div v-if="successMessage" class="success-message global-message" role="status">{{ successMessage }}</div>
 
@@ -342,7 +358,7 @@ async function signOut() {
             <button class="primary-button" type="submit" :disabled="savingRenewal">{{ savingRenewal ? "Saving…" : "Save renewal schedule" }}</button>
           </form>
           <div class="definition-list">
-            <article v-for="item in renewals" :key="item._id" class="definition-row"><strong>{{ item.contractId?.contractNumber }} · {{ item.contractId?.title }}</strong><small>{{ item.status.replace('_', ' ') }} · Notice by {{ new Date(item.noticeDeadline).toLocaleDateString() }} · Expires {{ new Date(item.expiryDate).toLocaleDateString() }}</small></article>
+            <article v-for="item in renewals" :key="item._id" class="definition-row"><strong>{{ item.contractId?.contractNumber }} · {{ item.contractId?.title }}</strong><small>{{ item.status.replace('_', ' ') }} · Notice by {{ new Date(item.noticeDeadline).toLocaleDateString() }} · Expires {{ new Date(item.expiryDate).toLocaleDateString() }}</small><div v-if="!['RENEWED', 'TERMINATED', 'EXPIRED'].includes(item.status)" class="task-actions"><button class="submit-action" @click="updateRenewalStatus(item, 'RENEWAL_IN_PROGRESS')">Start</button><button class="approve-button" @click="updateRenewalStatus(item, 'RENEWED')">Renewed</button><button class="reject-button" @click="updateRenewalStatus(item, 'TERMINATED')">Terminate</button></div></article>
             <p v-if="!renewals.length" class="panel-note">Set an expiry date and notice period to begin tracking renewals.</p>
           </div>
         </div>
