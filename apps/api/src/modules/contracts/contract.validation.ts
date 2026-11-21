@@ -7,7 +7,7 @@ const contractFields = z.object({
   contractNumber: z.string().trim().min(2).max(60).regex(/^[A-Za-z0-9._/-]+$/),
   type: z.enum(CONTRACT_TYPES),
   counterparty: z.string().trim().min(2).max(160),
-  vendorId: z.string().regex(/^[a-f\\d]{24}$/i).optional(),
+  vendorId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   description: z.string().trim().max(4000).optional(),
   ownerId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
   startDate: dateField,
