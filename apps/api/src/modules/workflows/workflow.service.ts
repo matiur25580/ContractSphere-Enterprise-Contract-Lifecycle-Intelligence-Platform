@@ -104,7 +104,7 @@ export async function decideOnWorkflow(tenantId: string, userId: string, instanc
   const tenant = oid(tenantId);
   const user = oid(userId);
   const session = await mongoose.startSession();
-  let outcome: InstanceType<typeof WorkflowInstance> | null = null;
+  const outcome: { value?: InstanceType<typeof WorkflowInstance> } = {};
   try {
     await session.withTransaction(async () => {
       const instance = await WorkflowInstance.findOne({ _id: instanceId, tenantId: tenant, active: true, status: "IN_PROGRESS" }).session(session);
@@ -130,7 +130,7 @@ export async function decideOnWorkflow(tenantId: string, userId: string, instanc
           { session }
         );
         if (contractUpdate.matchedCount !== 1) throw new HttpError(409, "The contract state changed before the rejection could be committed.", "CONTRACT_STATE_CONFLICT");
-        outcome = rejected;
+        outcome.value = rejected;
         return;
       }
 
@@ -146,7 +146,7 @@ export async function decideOnWorkflow(tenantId: string, userId: string, instanc
       const approvals = latestStage.decisions.filter(item => item.decision === "APPROVE").length;
       const required = latestStage.approvalMode === "ANY" ? 1 : latestStage.approverUserIds.length;
       if (approvals < required) {
-        outcome = recorded;
+        outcome.value = recorded;
         return;
       }
 
@@ -170,10 +170,10 @@ export async function decideOnWorkflow(tenantId: string, userId: string, instanc
         );
         if (contractUpdate.matchedCount !== 1) throw new HttpError(409, "The contract state changed before final approval could be committed.", "CONTRACT_STATE_CONFLICT");
       }
-      outcome = advanced;
+      outcome.value = advanced;
     });
-    if (!outcome) throw new HttpError(500, "The approval transaction did not return an updated workflow.", "WORKFLOW_UPDATE_FAILED");
-    return outcome;
+    if (!outcome.value) throw new HttpError(500, "The approval transaction did not return an updated workflow.", "WORKFLOW_UPDATE_FAILED");
+    return outcome.value;
   } finally {
     await session.endSession();
   }
