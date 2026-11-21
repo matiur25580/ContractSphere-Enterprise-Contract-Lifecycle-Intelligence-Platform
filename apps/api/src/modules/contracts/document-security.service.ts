@@ -36,7 +36,7 @@ export function verifyDocumentSignature(buffer: Buffer, mimeType: string): void 
   }
   if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
     const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b &&
-      [0x03, 0x05, 0x07].includes(buffer[2]) && [0x04, 0x06, 0x08].includes(buffer[3]);
+      [0x03, 0x05, 0x07].includes(buffer[2]!) && [0x04, 0x06, 0x08].includes(buffer[3]!);
     const entries = isZip ? readZipEntryNames(buffer) : null;
     if (!entries?.has("[Content_Types].xml") || !entries.has("word/document.xml")) {
       throw new HttpError(415, "The uploaded file is not a valid DOCX document.", "DOCUMENT_SIGNATURE_INVALID");
