@@ -51,12 +51,20 @@ export async function getContract(tenantId: string, contractId: string) {
   return { ...contract, versions };
 }
 
-export async function updateContract(tenantId: string, userId: string, contractId: string, changes: Record<string, any>) {
+export async function updateContract(tenantId: string, userId: string, role: string, contractId: string, changes: Record<string, any>) {
   const tenant = tenantObjectId(tenantId);
+  const existing = await Contract.findOne({ _id: contractId, tenantId: tenant, status: { $ne: "ARCHIVED" } }).select("ownerId").lean();
+  if (!existing) throw new HttpError(404, "Contract not found or archived.", "CONTRACT_NOT_FOUND");
+  if (role === "MEMBER" && existing.ownerId.toString() !== userId) {
+    throw new HttpError(403, "Only the contract owner or an organization administrator can update this contract.", "FORBIDDEN");
+  }
+  if (role === "MEMBER" && changes.ownerId && changes.ownerId.toString() !== userId) {
+    throw new HttpError(403, "Only an organization administrator can reassign contract ownership.", "FORBIDDEN");
+  }
   if (changes.ownerId && !await User.exists({ _id: changes.ownerId, tenantId: tenant, status: "active" })) throw new HttpError(400, "Contract owner must be an active member of this organization.", "INVALID_CONTRACT_OWNER");
   if (changes.vendorId && !await Vendor.exists({ _id: changes.vendorId, tenantId: tenant, status: "ACTIVE" })) throw new HttpError(400, "Linked vendor must be active and belong to this organization.", "INVALID_VENDOR");
   const updated = await Contract.findOneAndUpdate(
-    { _id: contractId, tenantId: tenant, status: { $ne: "ARCHIVED" } },
+    { _id: contractId, tenantId: tenant, status: { $ne: "ARCHIVED" }, ...(role === "MEMBER" ? { ownerId: tenantObjectId(userId) } : {}) },
     { $set: { ...changes, ...(changes.status === "ARCHIVED" ? { archivedAt: new Date() } : {}), updatedBy: tenantObjectId(userId) } },
     { new: true, runValidators: true }
   );

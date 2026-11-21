@@ -42,7 +42,7 @@ contractRouter.get("/:contractId", asyncHandler(async (req, res) => {
 contractRouter.patch("/:contractId", validate(updateContractSchema), asyncHandler(async (req, res) => {
   if (req.body.status && req.auth!.role === "MEMBER") throw new HttpError(403, "Only organization owners and administrators can change contract status.", "FORBIDDEN");
   if (req.body.status && !["EXECUTED", "EXPIRED", "TERMINATED", "ARCHIVED"].includes(req.body.status)) throw new HttpError(403, "Draft, review, and approval states are controlled by the approval workflow.", "WORKFLOW_STATE_REQUIRED");
-  const contract = await updateContract(req.auth!.tenantId, req.auth!.userId, idParam(req, "contractId"), req.body);
+  const contract = await updateContract(req.auth!.tenantId, req.auth!.userId, req.auth!.role, idParam(req, "contractId"), req.body);
   await audit(req, "CONTRACT_UPDATED", contract.id, `Updated contract ${contract.contractNumber}`, { status: contract.status });
   res.json({ success: true, data: { contract } });
 }));
