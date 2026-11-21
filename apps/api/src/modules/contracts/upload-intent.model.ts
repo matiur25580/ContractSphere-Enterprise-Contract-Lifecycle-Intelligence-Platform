@@ -10,6 +10,9 @@ export interface UploadIntentDocument {
   sizeBytes: number;
   expiresAt: Date;
   completedAt?: Date;
+  quarantinedAt?: Date;
+  scanStatus?: "CLEAN" | "INFECTED" | "REJECTED" | "ERROR";
+  scanResult?: string;
 }
 const schema = new Schema<UploadIntentDocument>({
   tenantId: { type: Schema.Types.ObjectId, ref: "Tenant", required: true, index: true },
@@ -20,6 +23,9 @@ const schema = new Schema<UploadIntentDocument>({
   mimeType: { type: String, required: true },
   sizeBytes: { type: Number, required: true },
   expiresAt: { type: Date, required: true, expires: 0 },
-  completedAt: Date
+  completedAt: Date,
+  quarantinedAt: Date,
+  scanStatus: { type: String, enum: ["CLEAN", "INFECTED", "REJECTED", "ERROR"] },
+  scanResult: { type: String, maxlength: 240 }
 }, { timestamps: true });
 export const UploadIntent = model<UploadIntentDocument>("UploadIntent", schema);
