@@ -40,6 +40,10 @@ export async function submitContractForApproval(tenantId: string, userId: string
       if (role === "MEMBER" && contract.ownerId.toString() !== userId) throw new HttpError(403, "Only the contract owner or an organization administrator can submit this contract.", "FORBIDDEN");
       const definition = await WorkflowDefinition.findOne({ _id: definitionId, tenantId: tenant, isActive: true }).session(session).lean();
       if (!definition) throw new HttpError(404, "Active workflow definition not found.", "WORKFLOW_NOT_FOUND");
+      const submitterId = oid(userId);
+      if (definition.stages.some(stage => stage.approverUserIds.some(approverId => approverId.equals(submitterId)))) {
+        throw new HttpError(403, "The contract submitter cannot be an approver in the same workflow.", "SELF_APPROVAL_NOT_ALLOWED");
+      }
 
       const stages: WorkflowExecutionStage[] = definition.stages.map(stage => ({
         name: stage.name,
@@ -111,6 +115,7 @@ export async function decideOnWorkflow(tenantId: string, userId: string, instanc
       if (!instance) throw new HttpError(404, "Active approval task not found.", "WORKFLOW_TASK_NOT_FOUND");
       const stageIndex = instance.currentStageIndex;
       const stage = instance.stages[stageIndex];
+      if (instance.submittedBy.equals(user)) throw new HttpError(403, "The contract submitter cannot approve or reject their own contract.", "SELF_APPROVAL_NOT_ALLOWED");
       if (!stage || stage.status !== "PENDING" || !stage.approverUserIds.some(id => id.equals(user))) {
         throw new HttpError(403, "You are not an assigned approver for the current stage.", "NOT_ASSIGNED_APPROVER");
       }
