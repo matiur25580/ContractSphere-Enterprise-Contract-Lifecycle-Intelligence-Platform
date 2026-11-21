@@ -9,6 +9,7 @@ import { UploadIntent } from "./upload-intent.model.js";
 import { createDownloadUrl, createUploadUrl, inspectStoredObject, readStoredObject, quarantineStoredObject } from "./storage.service.js";
 import { scanForMalware, verifyDocumentSignature } from "./document-security.service.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
+import { enqueueDocumentAnalysis } from "../intelligence/document-job.service.js";
 
 const tenantObjectId = (id: string) => new Types.ObjectId(id);
 const safeFilename = (name: string) => name.normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "document";
@@ -81,7 +82,7 @@ export async function createDocumentUpload(tenantId: string, userId: string, con
   }
 }
 
-export async function completeDocumentUpload(tenantId: string, userId: string, uploadId: string) {
+export async function completeDocumentUpload(tenantId: string, userId: string, uploadId: string, role: string) {
   const tenant = tenantObjectId(tenantId);
   const intent = await UploadIntent.findOne({ _id: uploadId, tenantId: tenant, userId: tenantObjectId(userId), completedAt: null, expiresAt: { $gt: new Date() } });
   if (!intent) throw new HttpError(404, "Upload request not found or expired.", "UPLOAD_INTENT_NOT_FOUND");
@@ -144,7 +145,8 @@ export async function completeDocumentUpload(tenantId: string, userId: string, u
     throw new HttpError(409, "A new document version was added concurrently. Please retry the upload completion.", "VERSION_CONFLICT");
   }
   await UploadIntent.updateOne({ _id: intent._id, completedAt: null }, { $set: { completedAt: new Date() } });
-  return file;
+  const job = await enqueueDocumentAnalysis({ tenantId, contractId: intent.contractId.toString(), fileId: file.id, userId, role });
+  return { file, job };
 }
 
 export async function getDocumentDownloadUrl(tenantId: string, contractId: string, fileId: string) {
