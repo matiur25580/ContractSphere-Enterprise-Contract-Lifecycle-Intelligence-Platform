@@ -67,9 +67,9 @@ export async function authorizedContract(tenantId: string, userId: string, role:
   if (!["OWNER", "ADMIN"].includes(role) && contract.ownerId.toString() !== userId && contract.createdBy.toString() !== userId) throw new HttpError(403, "You do not have access to analyze this contract.", "FORBIDDEN");
   return contract;
 }
-export async function analyzeContract(tenantId: string, userId: string, role: string, contractId: string, sourceText: string, sourceLabel: string) {
+export async function analyzeContract(tenantId: string, userId: string, role: string, contractId: string, sourceText: string, sourceLabel: string, engine: "RULE_BASED" | "AI_COMPATIBLE" = "RULE_BASED") {
   const contract = await authorizedContract(tenantId, userId, role, contractId);
-  const result = analyzeContractText(sourceText);
+  const result = engine === "AI_COMPATIBLE" ? await analyzeWithConfiguredAI(sourceText) : analyzeContractText(sourceText);
   const sourceFingerprint = createHash("sha256").update(sourceText.normalize("NFKC")).digest("hex");
   const report = await ContractIntelligenceReport.create({
     tenantId: oid(tenantId), contractId: contract._id, createdBy: oid(userId), sourceLabel,
