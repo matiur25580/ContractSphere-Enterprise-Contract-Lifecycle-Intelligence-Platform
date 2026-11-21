@@ -4,7 +4,7 @@
 
 ContractSphere is a multi-tenant contract lifecycle management (CLM) platform for creating, reviewing, approving, executing, monitoring, and analyzing business agreements.
 
-> Status: authentication, contract repository, and multi-stage approval workflow milestones implemented. Contract intelligence and production hardening are next.
+> Status: authentication, contract repository, multi-stage approval workflows, and initial obligations/renewal tracking are implemented. Contract intelligence and production hardening remain in progress.
 
 ## Product vision
 
@@ -16,7 +16,7 @@ Give legal, procurement, finance, and business teams one secure system of record
 - Contract repository, metadata, document versions, and controlled document access.
 - Reusable templates and clause library.
 - Configurable multi-stage approval workflows, delegation, and SLA escalation.
-- Obligation tracking, renewal calendars, and counterparty management.
+- Tenant-scoped obligation tracking, renewal calendars, notice deadlines, and counterparty management.
 - AI-assisted summaries, clause extraction, risk signals, and comparisons with source-grounded evidence and human review.
 - Append-oriented audit events, operational analytics, notifications, and exports.
 
@@ -115,6 +115,23 @@ All routes require `Authorization: Bearer <accessToken>` and are prefixed with `
 
 Each definition contains 1–10 sequential stages. Each stage supports `ALL` (every assigned approver must approve) or `ANY` (one approval completes the stage). Approvers must be active users in the same tenant. Submission snapshots the definition so later edits cannot rewrite an in-flight approval. A contract may have only one active workflow at a time. Rejection returns the contract to `DRAFT`; final approval moves it to `APPROVED`. Decision records include the actor, decision, comment, and timestamp. Direct API updates cannot bypass the workflow to set `IN_REVIEW` or `APPROVED`.
 
+## Obligations and renewal API
+
+All routes require `Authorization: Bearer <accessToken>` and are prefixed with `/api/v1`.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/obligations` | Create an obligation for a contract |
+| GET | `/obligations` | Filter and paginate tenant obligations |
+| PATCH | `/obligations/:obligationId` | Update an obligation or mark it complete/reopen it |
+| GET | `/obligations/renewals` | List renewal schedules with computed lifecycle status and summary |
+| PUT | `/obligations/renewals/:contractId` | Create or update a contract renewal schedule |
+| PATCH | `/obligations/renewals/:renewalId/status` | Mark a renewal in progress, renewed, or terminated |
+
+Obligations support PAYMENT, DELIVERABLE, SLA, COMPLIANCE, NOTICE, and OTHER types; LOW through CRITICAL priorities; due dates; active organization-member owners; and PENDING, IN_PROGRESS, COMPLETED, OVERDUE, and CANCELLED states. Lists support contract, owner, status, type, priority, due-date range, and pagination filters. Overdue status is derived from due date when read; completed and cancelled records remain terminal. Only the contract owner or an OWNER/ADMIN can create/manage its obligations and renewal schedule; only the obligation/renewal owner or an OWNER/ADMIN can update it.
+
+Renewal schedules record expiry date, notice period, derived notice deadline, renewal type, owner, and lifecycle status. The notice deadline is calculated server-side as expiry date minus notice-period days. Upcoming, notice-due, in-progress, renewed, terminated, and expired states are exposed. These endpoints provide tracking only: automated email/in-app reminders and durable scheduled jobs are not implemented yet.
+
 ## Engineering principles
 
 1. Enforce tenant scope on the server for every tenant-owned resource.
@@ -134,7 +151,8 @@ Each definition contains 1–10 sequential stages. Each stage supports `ALL` (ev
 - [x] Private S3-compatible upload/download URL workflow
 - [x] Configurable multi-stage approval workflow engine with ANY/ALL approvers and decision history
 - [ ] Templates and clause library
-- [ ] Obligations, renewals, vendors, and notifications
+- [x] Initial obligations and renewal tracking with derived notice deadlines
+- [ ] Vendor/counterparty management and automated notifications
 - [ ] AI-assisted contract intelligence with evidence references
 - [ ] Audit, analytics, exports, integrations, and production hardening
 

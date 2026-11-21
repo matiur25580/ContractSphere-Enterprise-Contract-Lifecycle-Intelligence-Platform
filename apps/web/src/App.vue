@@ -18,6 +18,8 @@ interface ContractSummary {
 interface ContractList { items: ContractSummary[]; pagination: { page: number; limit: number; total: number; pages: number }; }
 interface WorkflowDefinition { _id: string; name: string; stages: Array<{ name: string; approvalMode: 'ALL' | 'ANY'; approverUserIds: string[] }>; }
 interface ApprovalTask { _id: string; definitionName: string; currentStage: { name: string; approvalMode: string; approverUserIds: string[] }; contract: { title: string; contractNumber: string; counterparty: string } | null; }
+interface ObligationItem { _id: string; title: string; type: string; status: string; priority: string; dueDate: string; contractId: { title: string; contractNumber: string } | string; ownerId: { name: string } | string; }
+interface RenewalItem { _id: string; expiryDate: string; noticeDeadline: string; noticePeriodDays: number; renewalType: string; status: string; contractId: { title: string; contractNumber: string; counterparty: string } | null; }
 const auth = useAuthStore();
 const mode = ref<"login" | "register">("login");
 const errorMessage = ref("");
@@ -29,6 +31,12 @@ const search = ref("");
 const statusFilter = ref("");
 const workflowDefinitions = ref<WorkflowDefinition[]>([]);
 const approvalTasks = ref<ApprovalTask[]>([]);
+const obligations = ref<ObligationItem[]>([]);
+const renewals = ref<RenewalItem[]>([]);
+const obligationForm = reactive({ contractId: "", title: "", type: "DELIVERABLE", priority: "MEDIUM", dueDate: "", description: "" });
+const renewalForm = reactive({ contractId: "", expiryDate: "", noticePeriodDays: 30, renewalType: "MANUAL", notes: "" });
+const savingObligation = ref(false);
+const savingRenewal = ref(false);
 const workflowForm = reactive({ name: 'Standard contract review', approverUserIds: '' });
 const creatingWorkflow = ref(false);
 const selectedWorkflowId = ref('');
@@ -58,6 +66,47 @@ async function loadWorkflowData() {
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : 'Could not load approval workflows.'; }
 }
 
+async function loadObligationsAndRenewals() {
+  if (!auth.accessToken) return;
+  try {
+    const [obligationResult, renewalResult] = await Promise.all([
+      api<{ items: ObligationItem[] }>("/obligations?page=1&limit=50"),
+      api<{ items: RenewalItem[]; summary: { upcoming: number; noticeDue: number; inProgress: number; expired: number } }>("/obligations/renewals?page=1&limit=50")
+    ]);
+    obligations.value = obligationResult.items;
+    renewals.value = renewalResult.items;
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load obligations and renewals."; }
+}
+
+async function createObligation() {
+  errorMessage.value = ""; savingObligation.value = true;
+  try {
+    await api("/obligations", { method: "POST", body: JSON.stringify({ ...obligationForm, dueDate: new Date(obligationForm.dueDate).toISOString() }) });
+    Object.assign(obligationForm, { contractId: "", title: "", type: "DELIVERABLE", priority: "MEDIUM", dueDate: "", description: "" });
+    successMessage.value = "Contractual obligation created.";
+    await loadObligationsAndRenewals();
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not create obligation."; }
+  finally { savingObligation.value = false; }
+}
+
+async function saveRenewal() {
+  errorMessage.value = ""; savingRenewal.value = true;
+  try {
+    await api(`/obligations/renewals/${renewalForm.contractId}`, { method: "PUT", body: JSON.stringify({ ...renewalForm, expiryDate: new Date(renewalForm.expiryDate).toISOString() }) });
+    Object.assign(renewalForm, { contractId: "", expiryDate: "", noticePeriodDays: 30, renewalType: "MANUAL", notes: "" });
+    successMessage.value = "Renewal schedule saved; notice deadline calculated.";
+    await loadObligationsAndRenewals();
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not save renewal schedule."; }
+  finally { savingRenewal.value = false; }
+}
+
+async function setObligationStatus(item: ObligationItem, status: "COMPLETED" | "IN_PROGRESS" | "CANCELLED") {
+  try {
+    await api(`/obligations/${item._id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+    await loadObligationsAndRenewals();
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not update obligation."; }
+}
+
 async function loadContracts() {
   if (!auth.accessToken) return;
   loadingContracts.value = true;
@@ -78,7 +127,7 @@ onMounted(async () => {
   await auth.restore();
   if (auth.user) {
     if (!workflowForm.approverUserIds) workflowForm.approverUserIds = auth.user.id;
-    await Promise.all([loadContracts(), loadWorkflowData()]);
+    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals()]);
   }
 });
 
@@ -87,7 +136,7 @@ async function submitAuth() {
   try {
     if (mode.value === "register") await auth.register({ ...form });
     else await auth.login({ organizationSlug: form.organizationSlug, email: form.email, password: form.password });
-    await loadContracts();
+    await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals()]);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Something went wrong. Please try again.";
   }
@@ -253,6 +302,49 @@ async function signOut() {
             </article>
           </div>
           <div v-else class="empty-state compact-empty">No approvals are currently assigned to you.</div>
+        </div>
+      </section>
+
+      <section class="obligation-grid">
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">COMMITMENT TRACKING</span><h2>Obligations <span class="count-chip">{{ obligations.length }}</span></h2></div><button class="refresh-button" @click="loadObligationsAndRenewals">↻ Refresh</button></div>
+          <form @submit.prevent="createObligation">
+            <label>Related contract<select v-model="obligationForm.contractId" required><option value="" disabled>Select a contract</option><option v-for="contract in contracts" :key="contract._id" :value="contract._id">{{ contract.contractNumber }} · {{ contract.title }}</option></select></label>
+            <label>Obligation title<input v-model="obligationForm.title" required minlength="2" maxlength="180" placeholder="Deliver quarterly compliance report"/></label>
+            <div class="form-row">
+              <label>Type<select v-model="obligationForm.type"><option>PAYMENT</option><option>DELIVERABLE</option><option>SLA</option><option>COMPLIANCE</option><option>NOTICE</option><option>OTHER</option></select></label>
+              <label>Priority<select v-model="obligationForm.priority"><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option></select></label>
+            </div>
+            <label>Due date<input v-model="obligationForm.dueDate" type="date" required/></label>
+            <label>Description<input v-model="obligationForm.description" maxlength="2000" placeholder="Optional details"/></label>
+            <button class="primary-button" type="submit" :disabled="savingObligation || !contracts.length">{{ savingObligation ? "Saving…" : "Add obligation" }}</button>
+          </form>
+          <div v-if="obligations.length" class="definition-list">
+            <article v-for="item in obligations" :key="item._id" class="definition-row">
+              <div class="task-row">
+                <div class="task-copy"><strong>{{ item.title }}</strong><small>{{ typeof item.contractId === 'object' ? item.contractId.contractNumber : '' }} · {{ item.type }} · {{ item.priority }} · Due {{ new Date(item.dueDate).toLocaleDateString() }}</small><small>{{ item.status.replace('_', ' ') }}</small></div>
+                <div class="task-actions"><button v-if="item.status === 'COMPLETED' || item.status === 'CANCELLED'" class="approve-button" @click="setObligationStatus(item, 'IN_PROGRESS')">Reopen</button><template v-else><button class="approve-button" @click="setObligationStatus(item, 'COMPLETED')">Complete</button><button class="reject-button" @click="setObligationStatus(item, 'CANCELLED')">Cancel</button></template></div>
+              </div>
+            </article>
+          </div>
+          <p v-else class="panel-note">No contractual obligations recorded yet.</p>
+        </div>
+        <div class="panel workflow-panel">
+          <div class="panel-heading"><div><span class="eyebrow">EXPIRATION CONTROL</span><h2>Renewal calendar <span class="count-chip">{{ renewals.length }}</span></h2></div></div>
+          <form @submit.prevent="saveRenewal">
+            <label>Related contract<select v-model="renewalForm.contractId" required><option value="" disabled>Select a contract</option><option v-for="contract in contracts" :key="contract._id" :value="contract._id">{{ contract.contractNumber }} · {{ contract.title }}</option></select></label>
+            <label>Expiry date<input v-model="renewalForm.expiryDate" type="date" required/></label>
+            <div class="form-row">
+              <label>Notice period (days)<input v-model.number="renewalForm.noticePeriodDays" type="number" min="0" max="3650" required/></label>
+              <label>Renewal type<select v-model="renewalForm.renewalType"><option value="MANUAL">Manual</option><option value="AUTO">Automatic</option><option value="NONE">No renewal</option></select></label>
+            </div>
+            <label>Notes<input v-model="renewalForm.notes" maxlength="2000" placeholder="Optional renewal context"/></label>
+            <button class="primary-button" type="submit" :disabled="savingRenewal">{{ savingRenewal ? "Saving…" : "Save renewal schedule" }}</button>
+          </form>
+          <div class="definition-list">
+            <article v-for="item in renewals" :key="item._id" class="definition-row"><strong>{{ item.contractId?.contractNumber }} · {{ item.contractId?.title }}</strong><small>{{ item.status.replace('_', ' ') }} · Notice by {{ new Date(item.noticeDeadline).toLocaleDateString() }} · Expires {{ new Date(item.expiryDate).toLocaleDateString() }}</small></article>
+            <p v-if="!renewals.length" class="panel-note">Set an expiry date and notice period to begin tracking renewals.</p>
+          </div>
         </div>
       </section>
 
