@@ -9,6 +9,7 @@ import { createContract, createDocumentUpload, completeDocumentUpload, getContra
 import { createContractSchema, listContractsSchema, updateContractSchema, uploadIntentSchema } from "./contract.validation.js";
 
 export const contractRouter = Router();
+const uploadLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: "draft-8", legacyHeaders: false, message: { success: false, error: { code: "UPLOAD_RATE_LIMITED", message: "Too many document upload requests. Try again later." } } });
 contractRouter.use(requireAuth);
 const validate = (schema: z.ZodTypeAny, source: "body" | "query" = "body"): RequestHandler => (req, res, next) => {
   const result = schema.safeParse(req[source]);
