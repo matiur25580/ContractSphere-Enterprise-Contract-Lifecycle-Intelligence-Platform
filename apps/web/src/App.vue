@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
 import { useAuthStore } from "./stores/auth.store";
 
 interface ContractSummary {
@@ -16,6 +16,8 @@ interface ContractSummary {
   updatedAt: string;
 }
 interface ContractList { items: ContractSummary[]; pagination: { page: number; limit: number; total: number; pages: number }; }
+interface DocumentJob { _id: string; status: "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED"; attempts: number; maxAttempts: number; errorCode?: string; errorMessage?: string; reportId?: string; createdAt: string; contractId: { _id: string; title: string; contractNumber: string }; fileId: { _id: string; originalName: string; version: number }; }
+interface DocumentJobSummary { queued: number; processing: number; succeeded: number; failed: number; }
 interface WorkflowDefinition { _id: string; name: string; stages: Array<{ name: string; approvalMode: 'ALL' | 'ANY'; approverUserIds: string[] }>; }
 interface ApprovalTask { _id: string; definitionName: string; currentStage: { name: string; approvalMode: string; approverUserIds: string[] }; contract: { title: string; contractNumber: string; counterparty: string } | null; }
 interface ObligationItem { _id: string; title: string; type: string; status: string; priority: string; dueDate: string; contractId: { title: string; contractNumber: string } | string; ownerId: { name: string } | string; }
@@ -38,6 +40,9 @@ const successMessage = ref("");
 const loadingContracts = ref(false);
 const creatingContract = ref(false);
 const contracts = ref<ContractSummary[]>([]);
+const documentJobs = ref<DocumentJob[]>([]);
+const documentJobSummary = ref<DocumentJobSummary>({ queued: 0, processing: 0, succeeded: 0, failed: 0 });
+let documentJobRefreshTimer: ReturnType<typeof setInterval> | undefined;
 const search = ref("");
 const statusFilter = ref("");
 const workflowDefinitions = ref<WorkflowDefinition[]>([]);
@@ -276,6 +281,15 @@ async function updateRenewalStatus(item: RenewalItem, status: "RENEWAL_IN_PROGRE
   } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not update renewal status."; }
 }
 
+async function loadDocumentJobs() {
+  if (!auth.accessToken) return;
+  try {
+    const result = await api<{ jobs: DocumentJob[]; summary: DocumentJobSummary }>("/contracts/intelligence/jobs");
+    documentJobs.value = result.jobs;
+    documentJobSummary.value = result.summary;
+  } catch (error) { errorMessage.value = error instanceof Error ? error.message : "Could not load document processing status."; }
+}
+
 async function loadContracts() {
   if (!auth.accessToken) return;
   loadingContracts.value = true;
@@ -285,6 +299,7 @@ async function loadContracts() {
     if (statusFilter.value) params.set("status", statusFilter.value);
     const result = await api<ContractList>(`/contracts?${params.toString()}`);
     contracts.value = result.items;
+    await loadDocumentJobs();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Could not load contracts.";
   } finally {
@@ -295,10 +310,13 @@ async function loadContracts() {
 onMounted(async () => {
   await auth.restore();
   if (auth.user) {
+    documentJobRefreshTimer = setInterval(() => { void loadDocumentJobs(); }, 5000);
     if (!workflowForm.approverUserIds) workflowForm.approverUserIds = auth.user.id;
     await Promise.all([loadContracts(), loadWorkflowData(), loadObligationsAndRenewals(), loadVendors(), loadNotifications(), loadTemplates()]);
   }
 });
+
+onUnmounted(() => { if (documentJobRefreshTimer) clearInterval(documentJobRefreshTimer); });
 
 async function submitAuth() {
   errorMessage.value = "";
@@ -387,9 +405,9 @@ async function uploadDocument(contractId: string, event: Event) {
     });
     const uploaded = await fetch(result.uploadUrl, { method: result.method, headers: result.headers, body: file });
     if (!uploaded.ok) throw new Error("The document could not be transferred to private storage. Check bucket CORS and storage settings.");
-    await api(`/contracts/uploads/${result.uploadId}/complete`, { method: "POST" });
-    successMessage.value = `Uploaded ${file.name} as a new contract version.`;
-    await loadContracts();
+    const completed = await api<{ file: { id: string }; processingJob: { id: string; status: string } }>(`/contracts/uploads/${result.uploadId}/complete`, { method: "POST" });
+    successMessage.value = `Uploaded ${file.name}; document analysis is ${completed.processingJob.status.toLowerCase()}.`;
+    await Promise.all([loadContracts(), loadDocumentJobs()]);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Document upload failed.";
   }
@@ -447,6 +465,8 @@ async function compareContractVersions() {
 async function signOut() {
   await auth.logout();
   contracts.value = [];
+  documentJobs.value = [];
+  documentJobSummary.value = { queued: 0, processing: 0, succeeded: 0, failed: 0 };
   notifications.value = [];
   unreadNotifications.value = 0;
   notificationsOpen.value = false;
@@ -485,6 +505,13 @@ async function signOut() {
         </div>
         <button class="secondary-button" @click="signOut">Sign out</button>
       </div>
+
+<section class="processing-panel" aria-live="polite">
+        <div class="processing-heading"><div><div class="eyebrow">DOCUMENT OPERATIONS</div><h2>Processing monitor</h2><p>Live status for recent contract document analysis jobs.</p></div><button class="secondary-button" type="button" @click="loadDocumentJobs">Refresh</button></div>
+        <div class="processing-metrics"><div><strong>{{ documentJobSummary.queued }}</strong><span>Queued</span></div><div><strong>{{ documentJobSummary.processing }}</strong><span>Processing</span></div><div><strong>{{ documentJobSummary.succeeded }}</strong><span>Succeeded</span></div><div><strong>{{ documentJobSummary.failed }}</strong><span>Failed</span></div></div>
+        <div v-if="!documentJobs.length" class="processing-empty">No document analysis jobs yet. Upload a PDF or DOCX to start processing.</div>
+        <div v-else class="processing-list"><article v-for="job in documentJobs" :key="job._id" class="processing-job"><div class="processing-job-main"><strong>{{ job.fileId?.originalName ?? "Contract document" }}</strong><small>{{ job.contractId?.contractNumber }} · {{ job.contractId?.title }} · {{ new Date(job.createdAt).toLocaleString() }}</small><small v-if="job.errorMessage && job.status === 'FAILED'" class="processing-error">{{ job.errorCode }}: {{ job.errorMessage }}</small></div><div class="processing-job-state"><span :class="['status-pill', job.status.toLowerCase()]">{{ job.status }}</span><small>{{ job.attempts }}/{{ job.maxAttempts }} attempts</small><small v-if="job.reportId">Analysis report saved</small></div></article></div>
+      </section>
 
       <div class="metric-grid">
         <div class="metric-card"><span class="metric-label">TOTAL CONTRACTS</span><strong>{{ contracts.length }}</strong><small>Current result set</small></div>
