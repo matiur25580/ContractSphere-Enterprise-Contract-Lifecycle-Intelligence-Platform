@@ -16,6 +16,7 @@ export function getRenewalReminderType(noticeDeadline: Date, now = new Date()) {
 }
 function dayKey(value: Date) { return value.toISOString().slice(0, 10); }
 
+// Sweep bounded sets of upcoming obligations and renewals; notification dedupe keys prevent repeat alerts.
 export async function runReminderSweep(now = new Date()) {
   const obligationCutoff = new Date(now.getTime() + 3 * DAY_MS);
   const renewalCutoff = new Date(now.getTime() + 7 * DAY_MS);
