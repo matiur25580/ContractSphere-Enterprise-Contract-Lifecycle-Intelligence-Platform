@@ -8,6 +8,7 @@ import { Tenant } from "../tenants/tenant.model.js";
 interface AccessClaims { sub: string; tenantId: string; role: UserRole; }
 const supportedRoles: UserRole[] = ["OWNER", "ADMIN", "MEMBER"];
 
+// Validate token claims, then re-check the user's and tenant's live status before attaching trusted auth context.
 export const requireAuth: RequestHandler = async (req, _res, next) => {
   const header = req.header("authorization");
   if (!header?.startsWith("Bearer ")) return next(new HttpError(401, "Authentication required.", "UNAUTHENTICATED"));
