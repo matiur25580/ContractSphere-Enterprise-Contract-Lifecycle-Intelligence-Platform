@@ -14,6 +14,7 @@ let running = false;
 let stopping = false;
 const workerId = randomUUID();
 
+// Queue analysis only after confirming that both the contract and file belong to the supplied tenant.
 export async function enqueueDocumentAnalysis(input: {
   tenantId: string; contractId: string; fileId: string; userId: string; role: string;
 }, session?: ClientSession) {
