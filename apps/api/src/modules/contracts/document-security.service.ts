@@ -27,6 +27,7 @@ function readZipEntryNames(buffer: Buffer): Set<string> | null {
   return names;
 }
 
+// Check file signatures and required container entries instead of trusting the client-supplied MIME type.
 export function verifyDocumentSignature(buffer: Buffer, mimeType: string): void {
   if (mimeType === "application/pdf") {
     if (buffer.length < 8 || buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
