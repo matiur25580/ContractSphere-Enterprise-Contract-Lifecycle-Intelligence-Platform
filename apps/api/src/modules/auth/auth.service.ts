@@ -15,6 +15,7 @@ const createAccessToken = (user: { id: string; tenantId: string; role: "OWNER" |
     expiresIn: env.ACCESS_TOKEN_TTL as NonNullable<SignOptions["expiresIn"]>
   });
 
+// Persist only a hash of the opaque refresh token; the raw token is returned once to the caller.
 async function createRefreshSession(userId: string, tenantId: string, familyId = randomBytes(24).toString("hex"), session?: ClientSession) {
   const token = randomBytes(48).toString("base64url");
   const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
