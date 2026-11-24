@@ -16,6 +16,7 @@ const tenantObjectId = (id: string) => new Types.ObjectId(id);
 const safeFilename = (name: string) => name.normalize("NFKC").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "document";
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Validate linked vendor and owner against the same tenant before creating a contract record.
 export async function createContract(tenantId: string, userId: string, input: Record<string, any>) {
   const tenant = tenantObjectId(tenantId);
   const ownerId = input.ownerId ? tenantObjectId(input.ownerId) : tenantObjectId(userId);
